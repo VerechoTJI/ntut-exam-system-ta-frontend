@@ -7,6 +7,7 @@ import Anticheat from "../views/Anticheat.vue";
 import LogViewer from "../views/LogViewer.vue";
 import StudentCodeViewer from "../views/StudentCodeViewer.vue";
 import ExamGenerator from "../views/ExamGenerator.vue";
+import SystemSettings from "../views/SystemSettings.vue";
 
 const routes = [
   {
@@ -14,7 +15,11 @@ const routes = [
     name: "Home",
     component: Home,
   },
-
+  {
+    path: "/settings",
+    name: "SystemSettings",
+    component: SystemSettings,
+  },
   {
     path: "/execute",
     name: "ExecuteCode",
@@ -49,7 +54,7 @@ const routes = [
     path: "/examgenerator",
     name: "ExamGenerator",
     component: ExamGenerator,
-  }
+  },
 ];
 
 export const router = createRouter({

@@ -1,14 +1,21 @@
 import { createApp } from "vue";
+import { createPinia } from "pinia";
+import "./index.css";
 // import "./style.css";
 import App from "./App.vue";
-import { router } from "./router/index.ts";
-import 'highlight.js/styles/atom-one-dark.css';
-import hljs from 'highlight.js/lib/core';
-import python from 'highlight.js/lib/languages/python';
+import { router } from "./router/index";
+import "highlight.js/styles/atom-one-dark.css";
+import hljs from "highlight.js/lib/core";
+import python from "highlight.js/lib/languages/python";
 import hljsVuePlugin from "@highlightjs/vue-plugin";
 
 // 註冊需要的語言，減少打包體積
-hljs.registerLanguage('python', python);
+hljs.registerLanguage("python", python);
 
+const app = createApp(App);
+const pinia = createPinia();
 
-createApp(App).use(router).use(hljsVuePlugin).mount("#app");
+app.use(pinia);
+app.use(router);
+app.use(hljsVuePlugin);
+app.mount("#app");
