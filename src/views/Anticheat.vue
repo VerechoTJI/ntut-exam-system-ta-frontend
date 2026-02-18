@@ -5,11 +5,7 @@
         <h3>警告系統</h3>
         <div class="actions">
           <label class="switch">
-            <input
-              type="checkbox"
-              v-model="realtimeOn"
-              @change="toggleRealtime"
-            />
+            <input type="checkbox" v-model="realtimeOn" />
             <span>即時更新</span>
           </label>
           <button :disabled="loadingAlerts" @click="refreshAlerts">
@@ -49,7 +45,7 @@
               <td>{{ formatTime(a.time) }}</td>
               <td>{{ a.ipAddress }}</td>
               <td>{{ a.mac || "—" }}</td>
-              <td class="pre">{{ a.messeage }}</td>
+              <td class="pre">{{ a.messeage || a.message }}</td>
               <td>
                 <label class="switch">
                   <input
@@ -69,27 +65,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from "vue";
-import { io, Socket } from "socket.io-client";
-import { getAlertList, modifyAlertStatus, BASE_URL } from "../utilities/api";
+import { onMounted, onBeforeUnmount, computed } from "vue";
+import { useAnticheatStore, type AnticheatLog } from "../stores/anticheatStore";
 
-// 根據新的 JSON 格式定義介面
-type AlertItem = {
-  id: number;
-  time: string;
-  student_id: string; // 變更名稱
-  type: string;
-  ipAddress: string; // 變更名稱
-  mac?: string; // 新增欄位 (API 若未回傳此欄位，會顯示為 —)
-  messeage: string; // 根據 API 格式保留此拼寫
-  isOk: boolean; // 變更名稱
-};
+const store = useAnticheatStore();
 
-const alerts = ref<AlertItem[]>([]);
-const loadingAlerts = ref(false);
-const alertError = ref("");
-const realtimeOn = ref(true);
-let socket: Socket | null = null;
+// Use store state
+const alerts = computed(() => store.logs);
+const loadingAlerts = computed(() => store.isLoading);
+const alertError = computed(() => store.error);
+const realtimeOn = computed({
+  get: () => store.realtimeOn,
+  set: (val: boolean) => store.toggleRealtime(val),
+});
 
 const formatTime = (iso: string | null | undefined) => {
   if (!iso) return "—";
@@ -109,94 +97,33 @@ const formatTime = (iso: string | null | undefined) => {
 };
 
 const refreshAlerts = async () => {
-  loadingAlerts.value = true;
-  alertError.value = "";
+  await store.fetchAllLogs();
+};
+
+const onToggleOk = async (alert: AnticheatLog) => {
+  const target = !alert.isOk;
   try {
-    // 假設 getAlertList 回傳的資料已經符合 AlertItem[]
-    const result = await getAlertList();
-    if (Array.isArray(result)) {
-      alerts.value = result.sort(
-        (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()
-      );
-    } else {
-      throw new Error("回傳格式不正確");
-    }
+    await store.updateLogStatus(alert.id, target);
   } catch (e) {
     console.error(e);
-    alertError.value = "載入失敗";
-  } finally {
-    loadingAlerts.value = false;
-  }
-};
-
-const setupSocket = () => {
-  if (socket) return;
-  const url = BASE_URL.replace("/admin", "");
-  socket = io(url, { transports: ["websocket"] });
-  socket.on("connect", () => console.log("socket connected"));
-  socket.on("disconnect", () => console.log("socket disconnected"));
-  socket.on("connect_error", (err) => console.error("socket error", err));
-
-  // Socket 回傳的格式也改變了，這裡做相應處理
-  socket.on(
-    "newAlert",
-    (payload: { success: boolean; result: AlertItem[] | AlertItem }) => {
-      if (!payload?.success || !payload.result) return;
-      const incoming = Array.isArray(payload.result)
-        ? payload.result
-        : [payload.result];
-
-      const map = new Map(alerts.value.map((a) => [a.id, a]));
-      incoming.forEach((a) => map.set(a.id, a));
-
-      alerts.value = Array.from(map.values()).sort(
-        (a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()
-      );
-    }
-  );
-};
-
-const teardownSocket = () => {
-  if (!socket) return;
-  socket.off("newAlert");
-  socket.disconnect();
-  socket = null;
-};
-
-const toggleRealtime = () => {
-  if (realtimeOn.value) {
-    setupSocket();
-  } else {
-    teardownSocket();
-  }
-};
-
-const onToggleOk = async (alert: AlertItem) => {
-  const target = !alert.isOk;
-  // 注意：modifyAlertStatus 的實作可能需要確認是否接受新的 id 類型 (number)
-  const success = await modifyAlertStatus(String(alert.id), target);
-  if (success) {
-    alert.isOk = target;
-  } else {
-    alertError.value = "更新失敗";
   }
 };
 
 onMounted(async () => {
   await refreshAlerts();
-  setupSocket();
+  store.setupSocket();
 });
 
 onBeforeUnmount(() => {
-  teardownSocket();
+  store.teardownSocket();
 });
 </script>
 
 <style scoped>
 .page {
   padding: 16px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
-    sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
 .panel {
   border: 1px solid #e5e5e5;

@@ -10,13 +10,15 @@
   },
   "dependencies": {
     "@highlightjs/vue-plugin": "^2.1.0",
+    "@tailwindcss/vite": "^4.1.18",
     "axios": "^1.13.2",
     "highlight.js": "^11.11.1",
     "pinia": "^3.0.4",
     "socket.io-client": "^4.8.1",
-    "tailwind": "^4.0.0",
+    "tailwind": "^2.3.1",
     "vue": "^3.5.24",
-    "vue-router": "^4.6.3"
+    "vue-router": "^4.6.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

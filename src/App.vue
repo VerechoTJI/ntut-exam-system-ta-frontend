@@ -8,14 +8,21 @@
         <span class="title">On Machine TA Side</span>
       </div>
       <nav class="nav">
-        <router-link to="/" class="link" active-class="active" exact>主頁</router-link>
-        <router-link to="/scoretable" class="link" active-class="active">成績表</router-link>
-        <router-link to="/scoreboard" class="link" active-class="active">答題總覽</router-link>
-        <router-link to="/execute" class="link" active-class="active">執行</router-link>
-        <router-link to="/anticheat" class="link" active-class="active">防作弊</router-link>
-        <router-link to="/logviewer" class="link" active-class="active">學生日誌檢視器</router-link>
-        <router-link to="/studentcodeviewer" class="link" active-class="active">學生程式碼檢視器</router-link>
-        <router-link to="/examgenerator" class="link" active-class="active">考試產生器</router-link>
+        <router-link to="/settings" class="link" active-class="active" exact
+          >考試設定</router-link
+        >
+        <router-link to="/scoretable" class="link" active-class="active"
+          >成績表</router-link
+        >
+        <router-link to="/scoreboard" class="link" active-class="active"
+          >答題總覽</router-link
+        >
+        <router-link to="/anticheat" class="link" active-class="active"
+          >防作弊</router-link
+        >
+        <router-link to="/logviewer" class="link" active-class="active"
+          >學生日誌檢視器</router-link
+        >
       </nav>
     </header>
 
@@ -28,7 +35,8 @@
 <style scoped>
 :global(body) {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   background: #f5f6fa;
 }
 
@@ -83,7 +91,9 @@
   text-decoration: none;
   padding: 8px 12px;
   border-radius: 6px;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
   font-weight: 600;
 }
 

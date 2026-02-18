@@ -72,22 +72,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { getAllLogs } from "../utilities/api";
+import { useSystemLogStore } from "../stores/systemLogStore";
 
-// 修正: 更新型別定義，加入 mac_address
-type StudentLog = {
-  id: number;
-  timestamp: string;
-  student_ID: string;
-  ip_address: string;
-  mac_address?: string; // 新增欄位 (標記為可選，以防舊資料沒有)
-  action_type: string;
-  details: string;
-};
-
-const logs = ref<StudentLog[]>([]);
-const loading = ref(false);
-const error = ref("");
+const store = useSystemLogStore();
 
 // 修正: 拆分三個篩選變數
 const filterStudentId = ref("");
@@ -112,26 +99,17 @@ const formatTime = (iso: string | null | undefined) => {
 };
 
 const fetchAll = async () => {
-  loading.value = true;
-  error.value = "";
-  try {
-    const result = await getAllLogs();
-    if (Array.isArray(result)) {
-      // 這裡可以預設做時間排序
-      logs.value = result.sort(
-        (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
-    } else {
-      throw new Error("回傳格式不正確");
-    }
-  } catch (e) {
-    console.error(e);
-    error.value = "載入失敗";
-  } finally {
-    loading.value = false;
-  }
+  await store.fetchAllLogs();
 };
+
+const loading = computed(() => store.isLoading);
+const error = computed(() => store.error);
+// Copy and sort logs locally for display
+const logs = computed(() => {
+  return [...store.logs].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  );
+});
 
 // 修正: 更新篩選邏輯，同時滿足三個條件
 const filtered = computed(() => {
@@ -165,8 +143,8 @@ onMounted(fetchAll);
 <style scoped>
 .page {
   padding: 16px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
-    sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
 .header {
   display: flex;

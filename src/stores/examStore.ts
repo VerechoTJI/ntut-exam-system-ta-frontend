@@ -44,7 +44,7 @@ export const examConfigSchema = z.object({
 export type ExamConfig = z.infer<typeof examConfigSchema>;
 
 // Base URL configuration - assuming it matches the existing api.ts or env
-const BASE_URL = "http://localhost:3002/admin";
+const BASE_URL = "http://localhost:3002";
 
 export const useExamStore = defineStore("exam", {
   state: () => ({
@@ -102,11 +102,12 @@ export const useExamStore = defineStore("exam", {
       }
     },
 
-    async updateTestCase(testData: any) {
+    async updateTestCase(config: ExamConfig) {
       this.isLoading = true;
       this.error = null;
       try {
-        await axios.put(`${BASE_URL}/config/testcase`, testData);
+        console.log("Updating test case with full config:", config);
+        await axios.put(`${BASE_URL}/config/testcase`, config);
         // Optionally refetch config or update local state partially
         await this.fetchConfig();
       } catch (err: any) {
@@ -147,12 +148,28 @@ export const useExamStore = defineStore("exam", {
       this.isLoading = true;
       try {
         // Using the endpoint found in existing utilities/api.ts logic
-        await axios.get(`${BASE_URL}/reset-database`);
+        await axios.post(`${BASE_URL}/reset`, { clearSettings: true });
         this.config = null;
         this.isExamStarted = false;
       } catch (err: any) {
         console.error("Error resetting system", err);
         this.error = err.message || "Failed to reset system";
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    async initializeSystem(config: ExamConfig) {
+      this.isLoading = true;
+      this.error = null;
+      try {
+        await axios.post(`${BASE_URL}/init`, config);
+        this.config = config;
+        this.isExamStarted = false;
+      } catch (err: any) {
+        console.error("Error initializing system", err);
+        this.error = err.message || "Failed to initialize system";
+        throw err;
       } finally {
         this.isLoading = false;
       }

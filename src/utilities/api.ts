@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const BASE_URL = "http://localhost:3002/admin";
+export const BASE_URL = "http://localhost:3002";
 
 export async function initService(initJson: any): Promise<boolean> {
   try {
@@ -84,7 +84,7 @@ export async function getAlertList(): Promise<any[]> {
 
 export async function modifyAlertStatus(
   alertID: string,
-  isOK: boolean
+  isOK: boolean,
 ): Promise<boolean> {
   try {
     const response = await axios.post(`${BASE_URL}/set-alert-ok-status`, {
@@ -108,7 +108,6 @@ export async function getAllLogs(): Promise<any[]> {
   }
 }
 
-
 export async function getConfigAvailability(): Promise<boolean | null> {
   try {
     const response = await axios.get(`${BASE_URL}/get-config-availability`);
@@ -120,12 +119,12 @@ export async function getConfigAvailability(): Promise<boolean | null> {
 }
 
 export async function updateConfigAvailability(
-  available: boolean
+  available: boolean,
 ): Promise<boolean> {
   try {
     const response = await axios.post(
       `${BASE_URL}/toggle-config-availability`,
-      { available }
+      { available },
     );
     return response.data.success; // boolean
   } catch (error) {
@@ -134,16 +133,19 @@ export async function updateConfigAvailability(
   }
 }
 
-export async function getStudentCodes(studentID: string): Promise<{ codeList: string[]; codeOBJ: Record<string, string> } | null> {
+export async function getStudentCodes(
+  studentID: string,
+): Promise<{ codeList: string[]; codeOBJ: Record<string, string> } | null> {
   try {
-    const response = await axios.post(`${BASE_URL}/get-student-codes`, { studentID });
+    const response = await axios.post(`${BASE_URL}/get-student-codes`, {
+      studentID,
+    });
     return response.data.data; // { codeList: string[]; codeOBJ: Record<string, string> }
   } catch (error) {
     console.error("Failed to get student codes:", error);
     return null;
   }
 }
-
 
 export async function getHostUserUrl(): Promise<string | null> {
   try {

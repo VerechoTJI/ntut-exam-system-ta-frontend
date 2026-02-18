@@ -41,18 +41,45 @@
         >
           Reset System
         </button>
+        <button
+          @click="doInitialize"
+          class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-medium transition-colors"
+          :disabled="examStore.isLoading || !localConfig"
+        >
+          Init System
+        </button>
       </div>
     </div>
 
     <!-- Configuration Section -->
     <div class="bg-white rounded-lg shadow p-6">
-      <h2 class="text-xl font-semibold mb-4 text-gray-800">
-        Exam Configuration
-      </h2>
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-gray-800">Exam Configuration</h2>
+        <div class="space-x-2">
+          <label
+            class="cursor-pointer bg-blue-50 text-blue-600 px-3 py-1 rounded hover:bg-blue-100 transition-colors text-sm font-medium border border-blue-200"
+          >
+            Import JSON
+            <input
+              type="file"
+              class="hidden"
+              accept=".json"
+              @change="handleFileUpload"
+              :disabled="examStore.isExamStarted"
+            />
+          </label>
+          <button
+            @click="downloadConfig"
+            class="bg-gray-50 text-gray-600 px-3 py-1 rounded hover:bg-gray-100 transition-colors text-sm font-medium border border-gray-200"
+          >
+            Export JSON
+          </button>
+        </div>
+      </div>
 
-      <!-- Upload / View Config -->
+      <!-- If no config loaded -->
       <div
-        v-if="!examStore.config"
+        v-if="!localConfig"
         class="text-center py-10 border-2 border-dashed border-gray-300 rounded-lg"
       >
         <div class="mb-4">
@@ -71,122 +98,468 @@
           </svg>
           <p class="mt-1 text-sm text-gray-600">No configuration loaded</p>
         </div>
-        <label
-          class="cursor-pointer bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
+        <button
+          @click="createNewConfig"
+          class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
         >
-          <span>Upload Config JSON</span>
-          <input
-            type="file"
-            class="hidden"
-            accept=".json"
-            @change="handleFileUpload"
-          />
-        </label>
+          Create New Config
+        </button>
       </div>
 
+      <!-- Graphical Editor -->
       <div v-else>
-        <!-- Info Summary -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div class="p-4 bg-gray-50 rounded border border-gray-200">
-            <p class="text-sm text-gray-500">Test Title</p>
-            <p class="font-medium text-lg">{{ examStore.config.testTitle }}</p>
-          </div>
-          <div class="p-4 bg-gray-50 rounded border border-gray-200">
-            <p class="text-sm text-gray-500">Judger Settings</p>
-            <p class="text-sm">
-              Time Limit: {{ examStore.config.judgerSettings.timeLimit }}ms
-            </p>
-            <p class="text-sm">
-              Memory Limit: {{ examStore.config.judgerSettings.memoryLimit }}MB
-            </p>
-          </div>
-          <div
-            class="p-4 bg-gray-50 rounded border border-gray-200 col-span-full"
+        <!-- Basic Info -->
+        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+          <h3
+            class="font-medium text-gray-700 mb-3 uppercase text-xs tracking-wider"
           >
-            <p class="text-sm text-gray-500">Description</p>
-            <p>{{ examStore.config.description }}</p>
+            Basic Information
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Test Title</label
+              >
+              <input
+                v-model="localConfig.testTitle"
+                :disabled="examStore.isExamStarted"
+                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+              />
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Time Limit (ms)</label
+                >
+                <input
+                  type="number"
+                  v-model.number="localConfig.judgerSettings.timeLimit"
+                  :disabled="examStore.isExamStarted"
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1"
+                  >Memory Limit (KB)</label
+                >
+                <input
+                  type="number"
+                  v-model.number="localConfig.judgerSettings.memoryLimit"
+                  :disabled="examStore.isExamStarted"
+                  class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+                />
+              </div>
+            </div>
+            <div class="col-span-full">
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Description</label
+              >
+              <textarea
+                v-model="localConfig.description"
+                :disabled="examStore.isExamStarted"
+                rows="3"
+                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+              ></textarea>
+            </div>
           </div>
         </div>
 
-        <!-- Editor Section -->
-        <div class="border rounded-lg overflow-hidden">
-          <!-- If exam NOT started, allow full JSON edit/upload -->
-          <div
-            v-if="!examStore.isExamStarted"
-            class="p-4 bg-gray-50 border-b flex justify-between items-center"
+        <!-- Users Section -->
+        <details
+          class="bg-white border rounded-lg mb-4"
+          :open="!examStore.isExamStarted"
+        >
+          <summary
+            class="px-4 py-3 cursor-pointer bg-gray-50 font-medium text-gray-700 focus:outline-none flex justify-between items-center"
           >
-            <span class="text-sm font-medium text-gray-700"
-              >Full Configuration Edit</span
+            <span
+              >Accessible Users ({{ localConfig.accessableUsers.length }})</span
             >
-            <div>
-              <label
-                class="cursor-pointer text-blue-600 hover:text-blue-800 text-sm font-medium mr-4"
-              >
-                Upload New Config
-                <input
-                  type="file"
-                  class="hidden"
-                  accept=".json"
-                  @change="handleFileUpload"
-                />
-              </label>
+            <span class="text-xs text-gray-500" v-if="examStore.isExamStarted"
+              >Locked</span
+            >
+          </summary>
+          <div class="p-4 border-t" v-if="!examStore.isExamStarted">
+            <div class="flex flex-wrap gap-2 mb-4">
               <button
-                @click="saveFullConfig"
-                class="text-green-600 hover:text-green-800 text-sm font-medium"
+                @click="addUser"
+                class="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200"
               >
-                Save Changes
+                + Add User
+              </button>
+              <button
+                @click="clearUsers"
+                class="text-sm bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200"
+              >
+                Clear All
+              </button>
+            </div>
+
+            <div
+              class="max-h-60 overflow-y-auto mb-4 border rounded p-2 bg-gray-50"
+            >
+              <div
+                v-if="localConfig.accessableUsers.length === 0"
+                class="text-gray-400 text-center py-4 text-sm"
+              >
+                No users added
+              </div>
+              <div
+                v-for="(user, idx) in localConfig.accessableUsers"
+                :key="idx"
+                class="flex gap-2 mb-2 items-center"
+              >
+                <input
+                  v-model="user.id"
+                  placeholder="Student ID"
+                  class="flex-1 rounded-md border-gray-300 shadow-sm sm:text-sm p-1 border"
+                />
+                <input
+                  v-model="user.name"
+                  placeholder="Name"
+                  class="flex-1 rounded-md border-gray-300 shadow-sm sm:text-sm p-1 border"
+                />
+                <button
+                  @click="removeUser(idx)"
+                  class="text-red-500 hover:text-red-700"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-5 w-5"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="border-t pt-4">
+              <label class="block text-sm font-medium text-gray-700 mb-1"
+                >Bulk Import (CSV format: ID,Name)</label
+              >
+              <textarea
+                v-model="csvImportText"
+                placeholder="101,John Doe&#10;102,Jane Smith"
+                rows="3"
+                class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border mb-2"
+              ></textarea>
+              <button
+                @click="importUsersFromCSV"
+                class="text-sm bg-gray-200 text-gray-700 px-3 py-1 rounded hover:bg-gray-300"
+              >
+                Import CSV
               </button>
             </div>
           </div>
+        </details>
 
-          <!-- If exam STARTED, only allow testcase edit -->
-          <div
-            v-else
-            class="p-4 bg-yellow-50 border-b flex justify-between items-center"
-          >
-            <div class="flex items-center">
-              <svg
-                class="h-5 w-5 text-yellow-500 mr-2"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                />
-              </svg>
-              <span class="text-sm font-medium text-gray-700"
-                >Locked Mode: Only Test Cases Editable</span
-              >
-            </div>
-            <button
-              @click="showTestCaseUpdateModal = true"
-              class="text-blue-600 hover:text-blue-800 text-sm font-medium"
+        <!-- Puzzles Section -->
+        <div class="space-y-4">
+          <div class="flex justify-between items-end border-b pb-2 mb-4">
+            <h3
+              class="font-medium text-gray-700 uppercase text-xs tracking-wider"
             >
-              Edit Test Cases
+              Puzzles ({{ localConfig.puzzles.length }})
+            </h3>
+            <button
+              v-if="!examStore.isExamStarted"
+              @click="addPuzzle"
+              class="bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm hover:bg-blue-700 shadow-sm"
+            >
+              + Add Puzzle
             </button>
           </div>
 
-          <!-- JSON Viewer/Editor (Simplified as textarea for now, could be Monaco/CodeMirror) -->
-          <textarea
-            v-if="!examStore.isExamStarted"
-            v-model="editableConfigString"
-            class="w-full h-96 p-4 font-mono text-sm border-0 focus:ring-0 resize-y"
-          ></textarea>
-
-          <div v-else class="p-4">
-            <p class="text-gray-500 italic">
-              Configuration is locked. Start a new exam to fully edit.
-            </p>
-            <!-- We could display read-only view here -->
-            <pre
-              class="bg-gray-100 p-4 rounded overflow-auto max-h-96 text-sm"
-              >{{ examStore.config }}</pre
+          <div
+            v-for="(puzzle, pIdx) in localConfig.puzzles"
+            :key="pIdx"
+            class="bg-white border rounded-lg shadow-sm overflow-hidden"
+          >
+            <div
+              class="bg-gray-50 px-4 py-3 border-b flex justify-between items-center"
             >
+              <div class="font-medium text-gray-800 flex items-center gap-2">
+                <span
+                  class="bg-gray-200 text-gray-600 text-xs px-2 py-0.5 rounded-full"
+                  >#{{ pIdx + 1 }}</span
+                >
+                <input
+                  v-if="!examStore.isExamStarted"
+                  v-model="puzzle.title"
+                  class="bg-transparent border-none focus:ring-0 p-0 font-medium"
+                  placeholder="Puzzle Title"
+                />
+                <span v-else>{{ puzzle.title }}</span>
+              </div>
+              <button
+                v-if="!examStore.isExamStarted"
+                @click="removePuzzle(pIdx)"
+                class="text-red-600 hover:text-red-800 text-sm"
+              >
+                Delete
+              </button>
+            </div>
+
+            <div class="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 border-b">
+              <div>
+                <label class="block text-xs font-medium text-gray-500 uppercase"
+                  >Language</label
+                >
+                <select
+                  v-model="puzzle.language"
+                  :disabled="examStore.isExamStarted"
+                  class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
+                >
+                  <option value="python">Python</option>
+                  <option value="c">C</option>
+                  <option value="cpp">C++</option>
+                  <option value="java">Java</option>
+                  <option value="javascript">JavaScript</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-500 uppercase"
+                  >Time Limit (opt)(Ms)</label
+                >
+                <input
+                  type="number"
+                  v-model.number="puzzle.timeLimit"
+                  :disabled="examStore.isExamStarted"
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+                  placeholder="Default"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-500 uppercase"
+                  >Memory Limit (opt) (KB)</label
+                >
+                <input
+                  type="number"
+                  v-model.number="puzzle.memoryLimit"
+                  :disabled="examStore.isExamStarted"
+                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+                  placeholder="Default"
+                />
+              </div>
+            </div>
+
+            <!-- Subtasks -->
+            <div class="p-4 bg-gray-50/50">
+              <div class="flex justify-between items-center mb-3">
+                <h4 class="text-sm font-medium text-gray-700">
+                  Test Case Groups (Subtasks)
+                </h4>
+                <button
+                  v-if="!examStore.isExamStarted"
+                  @click="addSubtask(pIdx)"
+                  class="text-xs bg-white border border-gray-300 text-gray-700 px-2 py-1 rounded hover:bg-gray-50"
+                >
+                  + Add Group
+                </button>
+              </div>
+
+              <div class="space-y-4">
+                <div
+                  v-for="(subtask, sIdx) in puzzle.subtasks"
+                  :key="sIdx"
+                  class="border rounded-md bg-white p-3"
+                >
+                  <div
+                    class="flex justify-between items-center mb-3 border-b pb-2"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs font-mono text-gray-500"
+                        >Group {{ sIdx + 1 }}</span
+                      >
+                      <input
+                        v-model="subtask.title"
+                        :disabled="examStore.isExamStarted"
+                        class="text-sm border-gray-300 rounded focus:ring-blue-500 p-1 border"
+                        placeholder="Group Title"
+                      />
+                    </div>
+                    <button
+                      v-if="!examStore.isExamStarted"
+                      @click="removeSubtask(pIdx, sIdx)"
+                      class="text-red-500 text-xs hover:underline"
+                    >
+                      Remove Group
+                    </button>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Visible Cases -->
+                    <div>
+                      <div class="flex justify-between items-center mb-2">
+                        <span
+                          class="text-xs font-semibold text-green-700 uppercase tracking-wide"
+                          >Visible Cases</span
+                        >
+                        <button
+                          v-if="!examStore.isExamStarted"
+                          @click="addTestCase(pIdx, sIdx, 'visible')"
+                          class="text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          + Add
+                        </button>
+                      </div>
+                      <div class="space-y-2">
+                        <div
+                          v-for="(tc, tIdx) in subtask.visible"
+                          :key="tIdx"
+                          class="grid grid-cols-1 gap-1 border p-2 rounded bg-green-50/30 relative group"
+                        >
+                          <button
+                            v-if="!examStore.isExamStarted"
+                            @click="removeTestCase(pIdx, sIdx, 'visible', tIdx)"
+                            class="absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <svg
+                              class="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"
+                              />
+                            </svg>
+                          </button>
+                          <textarea
+                            v-model="tc.input"
+                            rows="1"
+                            class="text-xs font-mono w-full p-1 border rounded resize-y"
+                            placeholder="Input"
+                          ></textarea>
+                          <textarea
+                            v-model="tc.output"
+                            rows="1"
+                            class="text-xs font-mono w-full p-1 border rounded resize-y"
+                            placeholder="Output"
+                          ></textarea>
+                        </div>
+                        <div
+                          v-if="subtask.visible.length === 0"
+                          class="text-xs text-gray-400 italic text-center p-2"
+                        >
+                          No visible cases
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Hidden Cases -->
+                    <div>
+                      <div class="flex justify-between items-center mb-2">
+                        <span
+                          class="text-xs font-semibold text-red-700 uppercase tracking-wide"
+                          >Hidden Cases</span
+                        >
+                        <button
+                          v-if="!examStore.isExamStarted"
+                          @click="addTestCase(pIdx, sIdx, 'hidden')"
+                          class="text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          + Add
+                        </button>
+                      </div>
+                      <div class="space-y-2">
+                        <div
+                          v-for="(tc, tIdx) in subtask.hidden"
+                          :key="tIdx"
+                          class="grid grid-cols-1 gap-1 border p-2 rounded bg-red-50/30 relative group"
+                        >
+                          <button
+                            v-if="!examStore.isExamStarted"
+                            @click="removeTestCase(pIdx, sIdx, 'hidden', tIdx)"
+                            class="absolute top-1 right-1 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <svg
+                              class="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"
+                              />
+                            </svg>
+                          </button>
+                          <textarea
+                            v-model="tc.input"
+                            rows="1"
+                            class="text-xs font-mono w-full p-1 border rounded resize-y"
+                            placeholder="Input"
+                          ></textarea>
+                          <textarea
+                            v-model="tc.output"
+                            rows="1"
+                            class="text-xs font-mono w-full p-1 border rounded resize-y"
+                            placeholder="Output"
+                          ></textarea>
+                        </div>
+                        <div
+                          v-if="subtask.hidden.length === 0"
+                          class="text-xs text-gray-400 italic text-center p-2"
+                        >
+                          No hidden cases
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
+        </div>
+
+        <div class="mt-6 flex justify-end space-x-3 sticky bottom-4">
+          <div
+            v-if="hasUnsavedChanges"
+            class="flex items-center text-yellow-600 text-sm mr-4 bg-yellow-50 px-3 py-1 rounded border border-yellow-200 shadow-sm"
+          >
+            <svg
+              class="w-4 h-4 mr-1"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+            Unsaved Changes
+          </div>
+
+          <button
+            v-if="examStore.isExamStarted"
+            @click="confirmTestCaseUpdate"
+            class="bg-blue-600 text-white px-6 py-2 rounded-lg shadow hover:bg-blue-700 transition-colors font-medium"
+          >
+            Save Test Case Updates & Notify
+          </button>
+
+          <button
+            v-else
+            @click="saveFullConfig"
+            class="bg-green-600 text-white px-6 py-2 rounded-lg shadow hover:bg-green-700 transition-colors font-medium"
+          >
+            Save Full Configuration
+          </button>
         </div>
       </div>
     </div>
@@ -197,9 +570,9 @@
       v-if="showResetModal"
       class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
     >
-      <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+      <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
         <h3 class="text-lg font-bold text-gray-900 mb-2">Reset System?</h3>
-        <p class="text-gray-600 mb-6">
+        <p class="text-gray-600 mb-6 font-medium">
           This will clear all configuration and student data. This action cannot
           be undone.
         </p>
@@ -212,7 +585,7 @@
           </button>
           <button
             @click="performReset"
-            class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 shadow"
           >
             Confirm Reset
           </button>
@@ -220,55 +593,16 @@
       </div>
     </div>
 
-    <!-- TestCase Update Modal -->
-    <div
-      v-if="showTestCaseUpdateModal"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-    >
-      <div
-        class="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 h-5/6 flex flex-col"
-      >
-        <h3 class="text-lg font-bold text-gray-900 mb-4">Update Test Cases</h3>
-        <p class="text-sm text-gray-500 mb-2">
-          Modify inputs/outputs below. Saving will notify all students.
-        </p>
-
-        <div class="flex-1 overflow-auto border rounded p-2 mb-4">
-          <!-- Simple editor for the subset of config that constitutes test cases -->
-          <textarea
-            v-model="editableTestCaseString"
-            class="w-full h-full p-2 font-mono text-sm border focus:ring-blue-500 focus:border-blue-500 rounded"
-            placeholder="JSON content for test cases..."
-          ></textarea>
-        </div>
-
-        <div class="flex justify-end space-x-3">
-          <button
-            @click="showTestCaseUpdateModal = false"
-            class="px-4 py-2 text-gray-600 hover:text-gray-800"
-          >
-            Cancel
-          </button>
-          <button
-            @click="confirmTestCaseUpdate"
-            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Save & Notify Students
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Notification Modal for Test Case Update Confirmation -->
+    <!-- Update Confirm Modal -->
     <div
       v-if="showUpdateConfirmModal"
       class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
     >
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
         <h3 class="text-lg font-bold text-gray-900 mb-2">Confirm Update?</h3>
         <p class="text-gray-600 mb-6">
           This will update the test cases and send a notification
-          (`config_update`) to all connected students.
+          (`config_update`) to all connected students immediately.
         </p>
         <div class="flex justify-end space-x-3">
           <button
@@ -279,7 +613,7 @@
           </button>
           <button
             @click="performTestCaseUpdate"
-            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 shadow"
           >
             Yes, Send Update
           </button>
@@ -290,53 +624,57 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
 import {
   useExamStore,
   type ExamConfig,
   examConfigSchema,
 } from "../stores/examStore";
+import { useMessageStore } from "../stores/messegeStore";
 import { ZodError } from "zod";
 import { io } from "socket.io-client";
 import { BASE_URL } from "../utilities/api";
 
 const examStore = useExamStore();
-const editableConfigString = ref("");
-const editableTestCaseString = ref("");
+const messageStore = useMessageStore();
+const localConfig = ref<ExamConfig | null>(null);
+const csvImportText = ref("");
 
 const showResetModal = ref(false);
-const showTestCaseUpdateModal = ref(false);
 const showUpdateConfirmModal = ref(false);
+
+const hasUnsavedChanges = computed(() => {
+  return JSON.stringify(localConfig.value) !== JSON.stringify(examStore.config);
+});
 
 onMounted(async () => {
   await examStore.fetchStatus();
   await examStore.fetchConfig();
 });
 
-// Keep local string specific to viewed config
+// Sync store config to local editable config when loaded
 watch(
   () => examStore.config,
   (newConfig) => {
     if (newConfig) {
-      editableConfigString.value = JSON.stringify(newConfig, null, 2);
-      // Initialize test case editor with current config structure relevant to test cases
-      // We filter to just the parts needed for /config/testcase endpoint
-      // Structure: { testTitle: string, puzzles: [...] }
-      const testCaseData = {
-        testTitle: newConfig.testTitle,
-        puzzles: newConfig.puzzles.map((p) => ({
-          title: p.title,
-          subtasks: p.subtasks,
-        })),
-      };
-      editableTestCaseString.value = JSON.stringify(testCaseData, null, 2);
+      // Deep copy
+      localConfig.value = JSON.parse(JSON.stringify(newConfig));
     } else {
-      editableConfigString.value = "";
-      editableTestCaseString.value = "";
+      localConfig.value = null;
     }
   },
-  { deep: true },
+  { immediate: true, deep: true },
 );
+
+function createNewConfig() {
+  localConfig.value = {
+    testTitle: "New Exam",
+    description: "",
+    judgerSettings: { timeLimit: 1000, memoryLimit: 128 },
+    accessableUsers: [],
+    puzzles: [],
+  };
+}
 
 async function handleFileUpload(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
@@ -347,22 +685,18 @@ async function handleFileUpload(event: Event) {
     try {
       const content = e.target?.result as string;
       const json = JSON.parse(content);
-
-      // Validate with Zod
       const parsed = examConfigSchema.parse(json);
 
-      if (examStore.isExamStarted) {
-        alert("Exam started. Cannot replace full config.");
-        return;
-      }
+      // Update local config immediately for review before saving
+      localConfig.value = parsed;
+      // Also save directly if desired, but user might want to edit first.
+      // Requirement "allowing user to upload... check config type".
+      // To match typical UX, we load it into the editor.
 
-      // If valid, upload/update
-      if (examStore.config) {
-        await examStore.updateConfig(parsed);
-      } else {
-        await examStore.createConfig(parsed);
-      }
-      alert("Configuration loaded successfully!");
+      // OPTIONAL: Auto-save on upload? The previous version did. Let's ask via alert/confirmation or just autosave.
+      // Given the requirement to be able to "update ExamConfig", sticking to "Load into Editor" is safer.
+      // User can click "Save" to commit.
+      alert("Configuration loaded into editor. Please review and click Save.");
     } catch (err) {
       if (err instanceof ZodError) {
         alert(
@@ -371,24 +705,114 @@ async function handleFileUpload(event: Event) {
       } else {
         alert("Error parsing JSON file");
       }
-      console.error(err);
     }
   };
   reader.readAsText(file);
 }
 
-async function saveFullConfig() {
-  try {
-    const json = JSON.parse(editableConfigString.value);
-    const parsed = examConfigSchema.parse(json);
-    await examStore.updateConfig(parsed);
-    alert("Configuration saved!");
-  } catch (err) {
-    alert("Invalid JSON or Schema Error");
-    console.error(err);
+function downloadConfig() {
+  if (!localConfig.value) return;
+  const blob = new Blob([JSON.stringify(localConfig.value, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `exam-config-${new Date().toISOString().split("T")[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// User Management
+function addUser() {
+  localConfig.value?.accessableUsers.push({ id: "", name: "" });
+}
+function removeUser(idx: number) {
+  localConfig.value?.accessableUsers.splice(idx, 1);
+}
+function clearUsers() {
+  if (localConfig.value) localConfig.value.accessableUsers = [];
+}
+function importUsersFromCSV() {
+  if (!csvImportText.value || !localConfig.value) return;
+  const lines = csvImportText.value.split("\n");
+  lines.forEach((line) => {
+    const [id, name] = line.split(",");
+    if (id && name) {
+      localConfig.value!.accessableUsers.push({
+        id: id.trim(),
+        name: name.trim(),
+      });
+    }
+  });
+  csvImportText.value = "";
+}
+
+// Puzzle Management
+function addPuzzle() {
+  localConfig.value?.puzzles.push({
+    title: "New Puzzle",
+    language: "python", // default
+    subtasks: [],
+  });
+}
+function removePuzzle(idx: number) {
+  if (confirm("Delete this puzzle?")) {
+    localConfig.value?.puzzles.splice(idx, 1);
   }
 }
 
+// Subtask Management
+function addSubtask(pIdx: number) {
+  localConfig.value?.puzzles[pIdx].subtasks.push({
+    title: "Group 1",
+    visible: [],
+    hidden: [],
+  });
+}
+function removeSubtask(pIdx: number, sIdx: number) {
+  localConfig.value?.puzzles[pIdx].subtasks.splice(sIdx, 1);
+}
+
+// Test Case Management
+function addTestCase(pIdx: number, sIdx: number, type: "visible" | "hidden") {
+  localConfig.value?.puzzles[pIdx].subtasks[sIdx][type].push({
+    input: "",
+    output: "",
+  });
+}
+function removeTestCase(
+  pIdx: number,
+  sIdx: number,
+  type: "visible" | "hidden",
+  tIdx: number,
+) {
+  localConfig.value?.puzzles[pIdx].subtasks[sIdx][type].splice(tIdx, 1);
+}
+
+// Save Actions
+async function saveFullConfig() {
+  if (!localConfig.value) return;
+  try {
+    const parsed = examConfigSchema.parse(localConfig.value);
+
+    if (examStore.config) {
+      await examStore.updateConfig(parsed);
+    } else {
+      await examStore.createConfig(parsed);
+    }
+    alert("Configuration saved successfully!");
+  } catch (err) {
+    console.error(err);
+    if (err instanceof ZodError) {
+      alert("Validation Failed: " + err.issues[0].message);
+    } else {
+      alert("Failed to save configuration.");
+    }
+  }
+}
+
+// Status & Updates
 async function toggleExamStatus() {
   const newStatus = !examStore.isExamStarted;
   await examStore.setExamStatus(newStatus);
@@ -401,37 +825,54 @@ function confirmReset() {
 async function performReset() {
   await examStore.resetSystem();
   showResetModal.value = false;
+  localConfig.value = null;
   alert("System reset successfully.");
 }
 
-function confirmTestCaseUpdate() {
-  // Validate JSON before showing confirmation
+async function doInitialize() {
+  if (!localConfig.value) {
+    alert("Please create or load a configuration first.");
+    return;
+  }
+  if (
+    !confirm(
+      "Are you sure you want to initialize the system with the current configuration? This might overwrite existing data.",
+    )
+  ) {
+    return;
+  }
+
   try {
-    JSON.parse(editableTestCaseString.value);
-    showTestCaseUpdateModal.value = false;
-    showUpdateConfirmModal.value = true;
-  } catch (e) {
-    alert("Invalid JSON in test case editor");
+    const parsed = examConfigSchema.parse(localConfig.value);
+    await examStore.initializeSystem(parsed);
+    alert("System initialized successfully!");
+  } catch (err: any) {
+    console.error(err);
+    if (err instanceof ZodError) {
+      alert("Validation Failed: " + err.issues[0].message);
+    } else {
+      alert("Failed to initialize system: " + (err.message || "Unknown error"));
+    }
   }
 }
 
-async function performTestCaseUpdate() {
-  try {
-    const data = JSON.parse(editableTestCaseString.value);
-    await examStore.updateTestCase(data);
+function confirmTestCaseUpdate() {
+  showUpdateConfirmModal.value = true;
+}
 
-    // Notify students via socket
-    const socket = io(BASE_URL.replace("/admin", ""), {
-      transports: ["websocket"],
-    });
-    socket.on("connect", () => {
-      socket.emit("message", {
-        type: "config_update",
-        content: "Test cases have been updated.",
-      });
-      // Close socket after sending
-      setTimeout(() => socket.disconnect(), 1000);
-    });
+async function performTestCaseUpdate() {
+  if (!localConfig.value) return;
+  try {
+    // Send the full config
+    const parsed = examConfigSchema.parse(localConfig.value);
+    await examStore.updateTestCase(parsed);
+
+    // Notify students via messageStore
+    await messageStore.sendMessage(
+      "config_update",
+      "Test cases have been updated.",
+    );
+    console.log("Sent config_update message to students");
 
     showUpdateConfirmModal.value = false;
     alert("Test cases updated and students notified.");

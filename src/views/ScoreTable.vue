@@ -1,102 +1,404 @@
 <template>
-  <div class="page">
-    <header class="header">
-      <h2>學生成績表</h2>
-      <div class="actions">
-        <input
-          v-model="keyword"
-          placeholder="輸入學號或姓名搜尋"
-          @keyup.enter="fetchData"
-        />
-        <button :disabled="loading" @click="fetchData">
-          {{ loading ? "載入中..." : "重新整理" }}
+  <div class="p-6 max-w-[95%] mx-auto font-sans text-gray-800">
+    <header class="flex flex-wrap items-center gap-4 mb-6">
+      <h2 class="text-2xl font-bold text-gray-900">學生成績表</h2>
+
+      <div class="flex flex-wrap gap-2 ml-auto">
+        <div class="relative">
+          <div
+            class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none"
+          >
+            <svg
+              class="w-4 h-4 text-gray-500"
+              aria-hidden="true"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 20 20"
+            >
+              <path
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="m19 19-4-4m0-7A7 7 0 1 1 1 8a7 7 0 0 1 14 0Z"
+              />
+            </svg>
+          </div>
+          <input
+            v-model="keyword"
+            class="block w-full p-2 pl-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="搜尋學號或姓名..."
+            @keyup.enter="refreshData"
+          />
+        </div>
+
+        <button
+          @click="refreshData"
+          :disabled="scoreStore.loading"
+          class="px-4 py-2 text-sm font-medium text-gray-900 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-2 focus:ring-blue-700 focus:text-blue-700 disabled:opacity-50"
+        >
+          {{ scoreStore.loading ? "載入中..." : "重新整理" }}
         </button>
-        <button :disabled="loading || filtered.length === 0" @click="copyTable">
-          複製表格（TSV）
+
+        <button
+          @click="copyTable"
+          :disabled="scoreStore.loading || filteredRecords.length === 0"
+          class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 focus:ring-4 focus:ring-green-300 disabled:opacity-50"
+        >
+          複製表格 (Excel)
         </button>
-        <button :disabled="loading" @click="openFormulaModal">公式</button>
+
+        <button
+          @click="openFormulaModal"
+          :disabled="scoreStore.loading"
+          class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 disabled:opacity-50"
+        >
+          計算公式
+        </button>
       </div>
     </header>
 
-    <div v-if="error" class="error">{{ error }}</div>
-    <div v-if="loading" class="hint">資料載入中...</div>
-    <div v-if="!loading && filtered.length === 0 && !error" class="hint">
+    <!-- Error / Loading / Empty States -->
+    <div
+      v-if="scoreStore.error"
+      class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50"
+      role="alert"
+    >
+      <span class="font-medium">Error:</span> {{ scoreStore.error }}
+    </div>
+
+    <div
+      v-if="
+        !scoreStore.loading && filteredRecords.length === 0 && !scoreStore.error
+      "
+      class="p-4 mb-4 text-sm text-yellow-800 rounded-lg bg-yellow-50"
+      role="alert"
+    >
       找不到符合的資料
     </div>
 
-    <div class="table-wrapper" v-if="!loading && filtered.length > 0">
-      <table ref="tableRef">
-        <thead>
+    <!-- Main Table -->
+    <div
+      v-if="!scoreStore.loading && filteredRecords.length > 0"
+      class="relative overflow-x-auto shadow-md sm:rounded-lg border border-gray-200"
+    >
+      <table class="w-full text-sm text-left text-gray-500">
+        <thead
+          class="text-xs text-gray-700 uppercase bg-gray-100 sticky top-0 z-10"
+        >
           <tr>
-            <th rowspan="2">學生編號</th>
-            <th rowspan="2">姓名</th>
             <th
-              v-for="pg in puzzleGroupColumns"
-              :key="pg.puzzleId"
-              :colspan="pg.groups.length"
+              scope="col"
+              class="px-3 py-3 w-24 sticky left-0 bg-gray-100 z-20 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
             >
-              題目 {{ pg.puzzleId }}
+              學生編號
             </th>
-            <th rowspan="2">題目數</th>
-            <th rowspan="2">通過測資數</th>
-            <th rowspan="2">公式輸出</th>
-            <th rowspan="2">最後提交時間</th>
+            <th
+              scope="col"
+              class="px-3 py-3 w-32 sticky left-24 bg-gray-100 z-20 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
+            >
+              姓名
+            </th>
+
+            <!-- Dynamic Puzzle Columns -->
+            <template v-for="pid in puzzleIds" :key="pid">
+              <th
+                :colspan="subtaskCounts[pid] || 1"
+                class="px-3 py-2 text-center border-l border-b border-gray-300 bg-gray-200"
+              >
+                題目 {{ Number(pid) + 1 }}
+              </th>
+            </template>
+
+            <th rowspan="2" class="px-3 py-3 border-l border-gray-200">
+              題目數
+            </th>
+            <th rowspan="2" class="px-3 py-3">通過 Subtasks</th>
+            <th
+              rowspan="2"
+              class="px-3 py-3 bg-blue-50 text-blue-800 font-bold border-l border-blue-100"
+            >
+              公式得分
+            </th>
+            <th rowspan="2" class="px-3 py-3">提交時間</th>
           </tr>
           <tr>
-            <th v-for="col in flatGroupColumns" :key="col.key">
-              測資組 {{ col.groupId }}
-            </th>
+            <!-- Subtask headers below each puzzle -->
+            <template v-for="pid in puzzleIds" :key="`sub-${pid}`">
+              <th
+                v-for="sIdx in subtaskCounts[pid] || 0"
+                :key="`${pid}-${sIdx}`"
+                class="px-2 py-1 text-center font-normal text-xs border-l border-gray-200 min-w-[60px]"
+              >
+                Subtask {{ sIdx }}
+              </th>
+              <!-- If no subtasks found for a puzzle (edge case), show placeholder -->
+              <th
+                v-if="(subtaskCounts[pid] || 0) === 0"
+                class="px-2 py-1 border-l border-gray-200"
+              >
+                -
+              </th>
+            </template>
           </tr>
         </thead>
         <tbody>
           <tr
-            v-for="rec in filtered"
+            v-for="rec in filteredRecords"
             :key="rec.id"
-            :class="{ selected: rec.id === selectedRowId }"
-            @click="selectRow(rec.id)"
+            class="bg-white border-b hover:bg-gray-50 cursor-pointer transition-colors"
+            :class="{ 'bg-blue-50': selectedRecord?.id === rec.id }"
+            @click="selectRecord(rec)"
           >
-            <td>{{ rec.student_ID }}</td>
-            <td>{{ rec.student_name }}</td>
-            <td v-for="col in flatGroupColumns" :key="col.key">
-              {{ formatBool(groupResults[rec.id]?.[col.key]) }}
+            <td
+              class="px-3 py-3 font-medium text-gray-900 sticky left-0 bg-inherit z-10 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
+            >
+              {{ rec.student_ID }}
             </td>
-            <td>{{ rec.puzzle_amount }}</td>
-            <td>{{ rec.passed_puzzle_amount }}</td>
-            <td class="formula-cell">{{ formulaOutputs[rec.id] ?? "" }}</td>
-            <td>{{ formatTime(rec.last_submit_time) }}</td>
+            <td
+              class="px-3 py-3 sticky left-24 bg-inherit z-10 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]"
+            >
+              {{ rec.student_name }}
+            </td>
+
+            <!-- Puzzle Results Cells -->
+            <template v-for="pid in puzzleIds" :key="`cell-${pid}`">
+              <td
+                v-for="sIdx in subtaskCounts[pid] || 0"
+                :key="`${pid}-${sIdx}-val`"
+                class="px-2 py-3 text-center border-l border-gray-100"
+                :class="
+                  getStatusColorClass(getAggregatedStatus(rec, pid, sIdx - 1))
+                "
+              >
+                {{ getAggregatedStatus(rec, pid, sIdx - 1) || "-" }}
+              </td>
+              <td
+                v-if="(subtaskCounts[pid] || 0) === 0"
+                class="px-2 py-3 text-center border-l border-gray-100 text-gray-300"
+              >
+                -
+              </td>
+            </template>
+
+            <td class="px-3 py-3 text-center border-l border-gray-200">
+              {{ rec.puzzle_amount }}
+            </td>
+            <td class="px-3 py-3 text-center">
+              {{ rec.passed_subtask_amount }}
+            </td>
+            <td
+              class="px-3 py-3 text-center font-bold text-blue-600 bg-blue-50/50 border-l border-blue-100"
+            >
+              {{ formulaOutputs[rec.id] || "-" }}
+            </td>
+            <td class="px-3 py-3 text-xs text-gray-500 whitespace-nowrap">
+              {{ formatTime(rec.last_submit_time) }}
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <!-- 公式編輯彈窗 -->
+    <!-- Detail Modal -->
+    <div
+      v-if="selectedRecord"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50"
+      @click.self="selectedRecord = null"
+    >
+      <div
+        class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+      >
+        <div class="flex items-center justify-between p-4 border-b">
+          <h3 class="text-xl font-bold text-gray-900">
+            {{ selectedRecord.student_name }} ({{ selectedRecord.student_ID }})
+            - 詳細資料
+          </h3>
+          <button
+            @click="selectedRecord = null"
+            class="text-gray-400 hover:text-gray-500"
+          >
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <div class="p-6 overflow-y-auto">
+          <div
+            v-for="(results, pid) in selectedRecord.puzzle_results"
+            :key="pid"
+            class="mb-8"
+          >
+            <h4 class="text-lg font-semibold mb-2 text-gray-800">
+              題目 {{ Number(pid) + 1 }}
+            </h4>
+
+            <div
+              v-for="(subtask, sIdx) in results"
+              :key="sIdx"
+              class="mb-4 ml-4 p-4 border rounded-lg bg-gray-50"
+            >
+              <h5 class="font-medium text-gray-700 mb-2">
+                Subtask {{ sIdx + 1 }}
+              </h5>
+
+              <!-- Visible Cases -->
+              <div class="mb-3">
+                <span class="text-xs font-bold text-gray-500 uppercase"
+                  >Visible Cases</span
+                >
+                <div class="grid gap-2 mt-1">
+                  <div
+                    v-for="(vc, vIdx) in subtask.visible"
+                    :key="`v-${vIdx}`"
+                    class="flex items-center text-sm bg-white p-2 rounded border gap-3"
+                  >
+                    <span
+                      class="w-8 h-8 flex items-center justify-center rounded font-bold text-white text-xs shrink-0"
+                      :class="getStatusCodeBg(vc.status)"
+                    >
+                      {{ vc.status }}
+                    </span>
+                    <div
+                      class="grid grid-cols-2 gap-x-4 gap-y-1 w-full text-xs"
+                    >
+                      <div>
+                        <span class="text-gray-400">Exp:</span>
+                        <span class="font-mono text-gray-800 break-all">{{
+                          truncate(vc.expectedOutput)
+                        }}</span>
+                      </div>
+                      <div>
+                        <span class="text-gray-400">Gained:</span>
+                        <span class="font-mono text-gray-800 break-all">{{
+                          truncate(vc.userOutput)
+                        }}</span>
+                      </div>
+                      <div class="col-span-2 text-gray-400 text-[10px]">
+                        {{ vc.time ? `${vc.time}ms` : "" }}
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    v-if="!subtask.visible.length"
+                    class="text-gray-400 text-xs italic"
+                  >
+                    No visible cases
+                  </div>
+                </div>
+              </div>
+
+              <!-- Hidden Cases -->
+              <div class="mb-3">
+                <span class="text-xs font-bold text-gray-500 uppercase"
+                  >Hidden Cases</span
+                >
+                <div class="grid gap-2 mt-1">
+                  <div
+                    v-for="(hc, hIdx) in subtask.hidden"
+                    :key="`h-${hIdx}`"
+                    class="flex items-center text-sm bg-white p-2 rounded border gap-3"
+                  >
+                    <span
+                      class="w-8 h-8 flex items-center justify-center rounded font-bold text-white text-xs shrink-0"
+                      :class="getStatusCodeBg(hc.status)"
+                    >
+                      {{ hc.status }}
+                    </span>
+                    <div
+                      class="grid grid-cols-2 gap-x-4 gap-y-1 w-full text-xs"
+                    >
+                      <div>
+                        <span class="text-gray-400">Exp:</span>
+                        <span class="text-gray-500 italic">Hidden</span>
+                      </div>
+                      <div>
+                        <span class="text-gray-400">Gained:</span>
+                        <span class="text-gray-500 italic">Hidden</span>
+                      </div>
+                      <div class="col-span-2 text-gray-400 text-[10px]">
+                        {{ hc.time ? `${hc.time}ms` : "" }}
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    v-if="!subtask.hidden.length"
+                    class="text-gray-400 text-xs italic"
+                  >
+                    No hidden cases
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Formula Modal -->
     <div
       v-if="showFormulaModal"
-      class="modal-backdrop"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50"
       @click.self="closeFormulaModal"
     >
-      <div class="modal">
-        <div class="modal-header">
-          <h3>編輯公式（JS）</h3>
-          <button class="close" @click="closeFormulaModal">✕</button>
+      <div
+        class="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]"
+      >
+        <div class="p-4 border-b flex justify-between items-center">
+          <h3 class="text-lg font-bold">編輯計分公式 (JavaScript)</h3>
+          <button
+            @click="closeFormulaModal"
+            class="text-gray-500 hover:text-gray-700"
+          >
+            ✕
+          </button>
         </div>
-        <div class="modal-body">
-          <p class="tip">
-            輸入 JS 程式碼，系統會包成
-            <code>function(record) { /* 你的程式 */ }</code>。 請在程式碼中
-            <strong>return 數值或字串</strong>；<code>record</code>
-            為當前列的學生物件。
+        <div class="p-4 flex-1 overflow-auto">
+          <p class="text-sm text-gray-600 mb-2">
+            系統會將代碼包裹為
+            <code>function(record) { ... }</code
+            >。請回傳分數(字串或數字)。<br />
+            <code>record</code> 包含 <code>puzzle_results</code>,
+            <code>passed_subtask_amount</code> 等欄位。
           </p>
-          <textarea
-            v-model="formulaCode"
-            rows="10"
-            spellcheck="false"
-          ></textarea>
-          <div v-if="formulaError" class="error">{{ formulaError }}</div>
+          <div class="relative">
+            <textarea
+              v-model="formulaCode"
+              class="w-full h-64 p-3 font-mono text-sm border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+              spellcheck="false"
+            ></textarea>
+          </div>
+          <div
+            v-if="formulaError"
+            class="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded"
+          >
+            {{ formulaError }}
+          </div>
         </div>
-        <div class="modal-footer">
-          <button @click="applyFormula">套用</button>
-          <button @click="closeFormulaModal">取消</button>
+        <div class="p-4 border-t bg-gray-50 flex justify-end space-x-2">
+          <button
+            @click="resetDefaultFormula"
+            class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+          >
+            重置預設值
+          </button>
+          <button
+            @click="applyFormula"
+            class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700"
+          >
+            套用
+          </button>
         </div>
       </div>
     </div>
@@ -105,474 +407,296 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
-import { io, Socket } from "socket.io-client";
-import { getAllStudentsScores, BASE_URL } from "../utilities/api";
+import {
+  useScoreStore,
+  type StudentRecord,
+  type StatusCode,
+} from "../stores/scoreStore";
 
-type PuzzleResults = Record<string, boolean>;
-type StudentRecord = {
-  id: number;
-  student_ID: string;
-  student_name: string;
-  last_submit_time: string | null;
-  puzzle_amount: number;
-  passed_puzzle_amount: number;
-  puzzle_results: PuzzleResults;
-};
-
-type ScoresPayload = { success: boolean; result: StudentRecord[] };
-
-const LOCAL_STORAGE_KEY = "scores_formula_code_v1";
-
-const records = ref<StudentRecord[]>([]);
-const loading = ref(false);
-const error = ref("");
+const scoreStore = useScoreStore();
 const keyword = ref("");
+const selectedRecord = ref<StudentRecord | null>(null);
 
-const tableRef = ref<HTMLTableElement | null>(null);
-let socket: Socket | null = null;
-
-/** row 選取 */
-const selectedRowId = ref<number | null>(null);
-const selectRow = (id: number) => {
-  selectedRowId.value = id;
-};
-
-/** 公式相關狀態 */
+// Formula State
 const showFormulaModal = ref(false);
-const formulaCode = ref<string>(`const { puzzle_amount, puzzle_results } = record;
+const LOCAL_STORAGE_KEY = "scores_formula_v2"; // Changed key for versioning
+const defaultFormula = `
+// Available: record.subtask_amount, record.puzzle_results (map)
+// record.puzzle_results['0'] is array of subtasks for puzzle 0
+
+const { puzzle_results, puzzle_amount } = record;
+if (!puzzle_amount) return "0 / 100";
 
 let totalScore = 0;
 const scorePerPuzzle = 100 / puzzle_amount;
 
-for (let p = 1; p <= puzzle_amount; p++) {
-   const regex = new RegExp(\`^puzzle\${p}-(\\\\d+)-(\\\\d+)$\`);
-  const groups = {};
+// Iterate through puzzles (keys might be "0", "1"...)
+Object.keys(puzzle_results).forEach(pid => {
+    const subtasks = puzzle_results[pid];
+    if (!subtasks || subtasks.length === 0) return;
 
-  // 分組 groupID → caseID
-  for (const key in puzzle_results) {
-    const match = key.match(regex);
-    if (match) {
-      const groupID = match[1];
-      const caseID = match[2];
-      if (!groups[groupID]) groups[groupID] = {};
-      groups[groupID][caseID] = puzzle_results[key];
-    }
-  }
+    let passedSubtasks = 0;
+    subtasks.forEach(sub => {
+        // A subtask is passed if ALL visible AND hidden cases are AC
+        const visiblePass = sub.visible.every(tc => tc.status === 'AC');
+        const hiddenPass = sub.hidden.every(tc => tc.status === 'AC');
+        if (visiblePass && hiddenPass) {
+            passedSubtasks++;
+        }
+    });
+    
+    // Proportional score for this puzzle
+    totalScore += (passedSubtasks / subtasks.length) * scorePerPuzzle;
+});
 
-  const groupIDs = Object.keys(groups);
-  if (groupIDs.length === 0) continue;
-
-  let passedGroups = 0;
-
-  groupIDs.forEach(groupID => {
-    const allPassed = Object.values(groups[groupID]).every(v => v === true);
-    if (allPassed) passedGroups++;
-  });
-
-  // 該題得分（依 group 比例）
-  const puzzleScore = (passedGroups / groupIDs.length) * scorePerPuzzle;
-  totalScore += puzzleScore;
-}
-
-const rounded = Math.round(totalScore);
-return \`\${rounded} / 100\`;`);
+return Math.round(totalScore) + " / 100";
+`;
+const formulaCode = ref(defaultFormula);
 const formulaError = ref("");
-const formulaFn = ref<(r: StudentRecord) => unknown>(() => "");
+// Compiled formula function
+const formulaFn = ref<(r: StudentRecord) => any>(() => "");
 
-/** 套用資料 */
-const applyData = (res: ScoresPayload) => {
-  if (res?.success && Array.isArray(res.result)) {
-    records.value = res.result;
-  } else {
-    throw new Error("回傳格式不正確");
-  }
-};
-
-const fetchData = async () => {
-  loading.value = true;
-  error.value = "";
-  try {
-    const res = await getAllStudentsScores();
-    applyData(res as ScoresPayload);
-  } catch (e) {
-    console.error(e);
-    error.value = "載入失敗，請稍後再試";
-  } finally {
-    loading.value = false;
-  }
-};
-
-const setupSocket = () => {
-  const url = BASE_URL.replace("/admin", "");
-  socket = io(url, { transports: ["websocket"] });
-
-  socket.on("connect", () => console.log("socket connected"));
-  socket.on("scoreUpdate", (payload: ScoresPayload) => {
-    try {
-      applyData(payload);
-    } catch (err) {
-      console.error("scoreUpdate payload 格式錯誤", err);
-    }
-  });
-  socket.on("disconnect", () => console.log("socket disconnected"));
-  socket.on("connect_error", (err) =>
-    console.error("socket connect_error", err)
-  );
-};
-
-/** 初始載入資料與公式 */
 onMounted(async () => {
-  // 載入 localStorage 的公式
+  // Load formula
   const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-  if (saved) {
-    formulaCode.value = saved;
-    try {
-      const fn = new Function("record", saved) as (r: StudentRecord) => unknown;
-      formulaFn.value = fn;
-    } catch (err) {
-      console.error("載入儲存公式錯誤", err);
-      formulaError.value = "儲存的公式有誤，請重新編輯";
-    }
-  }
+  if (saved) formulaCode.value = saved;
+  tryApplyFormula(formulaCode.value, false);
 
-  await fetchData();
-  setupSocket();
+  await scoreStore.fetchScores();
+  scoreStore.setupSocket();
 });
 
 onBeforeUnmount(() => {
-  if (socket) {
-    socket.off("scoreUpdate");
-    socket.disconnect();
-    socket = null;
-  }
+  scoreStore.disconnectSocket();
 });
 
-/** 篩選 */
-const filtered = computed(() => {
-  const kw = keyword.value.trim().toLowerCase();
-  if (!kw) return records.value;
-  return records.value.filter(
+const refreshData = () => {
+  scoreStore.fetchScores();
+};
+
+const filteredRecords = computed(() => {
+  const k = keyword.value.trim().toLowerCase();
+  if (!k) return scoreStore.records;
+  return scoreStore.records.filter(
     (r) =>
-      r.student_ID.toLowerCase().includes(kw) ||
-      r.student_name.toLowerCase().includes(kw)
+      r.student_name.toLowerCase().includes(k) ||
+      r.student_ID.toLowerCase().includes(k),
   );
 });
 
-/**
- * puzzle{puzzleId}-{groupId}-{caseId}
- * 只顯示到 group 層級：puzzle{puzzleId}-{groupId}
- */
-const parsePuzzleKey = (key: string) => {
-  const m = key.match(/^puzzle([^-]+)-([^-]+)-([^-]+)$/);
-  if (!m) return null;
-  const [, puzzleId, groupId, caseId] = m;
-  return { puzzleId, groupId, caseId };
-};
-const buildGroupKey = (puzzleId: string, groupId: string) =>
-  `puzzle${puzzleId}-${groupId}`;
-
-/** 動態題組欄結構 */
-const puzzleGroupColumns = computed(() => {
-  const map: Record<string, Set<string>> = {};
-  filtered.value.forEach((r) => {
-    Object.keys(r.puzzle_results || {}).forEach((k) => {
-      const parsed = parsePuzzleKey(k);
-      if (!parsed) return;
-      map[parsed.puzzleId] = map[parsed.puzzleId] || new Set<string>();
-      map[parsed.puzzleId].add(parsed.groupId);
-    });
+// Calculate columns dynamically
+// We need to know max subtasks for each puzzle to align columns
+const puzzleIds = computed(() => {
+  const pids = new Set<string>();
+  filteredRecords.value.forEach((r) => {
+    Object.keys(r.puzzle_results || {}).forEach((k) => pids.add(k));
   });
-  return Object.entries(map)
-    .sort((a, b) =>
-      a[0].localeCompare(b[0], "zh-Hant", { numeric: true, sensitivity: "base" })
-    )
-    .map(([puzzleId, set]) => ({
-      puzzleId,
-      groups: Array.from(set).sort((a, b) =>
-        a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" })
-      ),
-    }));
+  return Array.from(pids).sort((a, b) => Number(a) - Number(b));
 });
 
-const flatGroupColumns = computed(
-  () =>
-    puzzleGroupColumns.value.flatMap((pg) =>
-      pg.groups.map((groupId) => ({
-        key: buildGroupKey(pg.puzzleId, groupId),
-        puzzleId: pg.puzzleId,
-        groupId,
-      }))
-    )
-);
-
-/** 每列的題組通過狀態：同 group 底下所有 case 都為 true 才算通過 */
-const groupResults = computed<Record<number, Record<string, boolean | undefined>>>(
-  () => {
-    const map: Record<number, Record<string, boolean | undefined>> = {};
-    filtered.value.forEach((rec) => {
-      const temp: Record<
-        string,
-        { allTrue: boolean; hasAny: boolean }
-      > = {};
-      Object.entries(rec.puzzle_results || {}).forEach(([k, v]) => {
-        const parsed = parsePuzzleKey(k);
-        if (!parsed) return;
-        const gKey = buildGroupKey(parsed.puzzleId, parsed.groupId);
-        if (!temp[gKey]) temp[gKey] = { allTrue: true, hasAny: false };
-        temp[gKey].hasAny = true;
-        if (!v) temp[gKey].allTrue = false;
-      });
-      const result: Record<string, boolean | undefined> = {};
-      Object.entries(temp).forEach(([gKey, status]) => {
-        result[gKey] = status.hasAny ? status.allTrue : undefined;
-      });
-      map[rec.id] = result;
+const subtaskCounts = computed(() => {
+  const counts: Record<string, number> = {};
+  puzzleIds.value.forEach((pid) => {
+    let max = 0;
+    filteredRecords.value.forEach((r) => {
+      const arr = r.puzzle_results[pid];
+      if (arr && arr.length > max) max = arr.length;
     });
-    return map;
+    counts[pid] = max;
+  });
+  return counts;
+});
+
+// Helper to determine status string for a subtask cell
+const getAggregatedStatus = (
+  rec: StudentRecord,
+  pid: string,
+  sIdx: number,
+): string => {
+  const subtasks = rec.puzzle_results[pid];
+  if (!subtasks || !subtasks[sIdx]) return "";
+
+  const sub = subtasks[sIdx];
+  const allCases = [...sub.visible, ...sub.hidden];
+  if (allCases.length === 0) return "";
+
+  // Priority: AC if all AC. Else Show first non-AC error.
+  // Order of error severity could be debatable, but usually we just want to know "Why not AC?"
+  // If mixed errors, which one to show? Usually just the first failed one we encounter.
+
+  // However, cell display space is small.
+  // If all AC -> AC
+  // Else -> First non-AC status found.
+
+  for (const c of allCases) {
+    if (c.status !== "AC") return c.status;
   }
-);
-
-/** 公式輸出：計算每列顯示值；若出錯輸出 "error" */
-const formulaOutputs = computed<Record<number, string>>(() => {
-  const out: Record<number, string> = {};
-  filtered.value.forEach((rec) => {
-    try {
-      const v = formulaFn.value(rec);
-      out[rec.id] = v === undefined ? "" : String(v);
-    } catch (err) {
-      out[rec.id] = "error";
-      console.error("公式執行錯誤", err);
-    }
-  });
-  return out;
-});
-
-/** 彈窗控制 */
-const openFormulaModal = () => {
-  formulaError.value = "";
-  showFormulaModal.value = true;
-};
-const closeFormulaModal = () => {
-  showFormulaModal.value = false;
-  formulaError.value = "";
+  return "AC";
 };
 
-/** 套用公式：將使用者程式碼包成 function(record) {...} 並存入 localStorage */
-const applyFormula = () => {
-  try {
-    const fn = new Function("record", formulaCode.value) as (
-      r: StudentRecord
-    ) => unknown;
-    // 先試跑一次避免語法錯誤
-    fn({} as StudentRecord);
-    formulaFn.value = fn;
-    localStorage.setItem(LOCAL_STORAGE_KEY, formulaCode.value);
-    formulaError.value = "";
-    showFormulaModal.value = false;
-  } catch (err: any) {
-    console.error(err);
-    formulaError.value = err?.message || "公式有誤，請檢查程式碼";
+const getStatusColorClass = (status: string) => {
+  switch (status) {
+    case "AC":
+      return "text-green-600 font-bold bg-green-50";
+    case "WA":
+      return "text-red-600 font-bold bg-red-50";
+    case "TLE":
+      return "text-orange-600 font-bold bg-orange-50";
+    case "MLE":
+      return "text-orange-600 font-bold bg-orange-50";
+    case "RE":
+      return "text-purple-600 font-bold bg-purple-50";
+    case "CE":
+      return "text-yellow-600 font-bold bg-yellow-50";
+    case "SE":
+      return "text-gray-600 font-bold bg-gray-100";
+    default:
+      return "text-gray-400";
   }
 };
 
-/** 工具函式 */
+const getStatusCodeBg = (status: StatusCode) => {
+  switch (status) {
+    case "AC":
+      return "bg-green-500";
+    case "WA":
+      return "bg-red-500";
+    case "TLE":
+      return "bg-orange-500";
+    case "MLE":
+      return "bg-orange-500";
+    case "RE":
+      return "bg-purple-500";
+    case "CE":
+      return "bg-yellow-500";
+    case "SE":
+      return "bg-gray-500";
+    default:
+      return "bg-gray-400";
+  }
+};
+
 const formatTime = (iso: string | null) => {
-  if (!iso) return "—";
+  if (!iso) return "-";
   try {
-    return new Intl.DateTimeFormat("zh-TW", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
+    const d = new Date(iso);
+    return d.toLocaleString("zh-TW", {
+      hour12: false,
+      month: "numeric",
+      day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }).format(new Date(iso));
+    });
   } catch {
     return iso;
   }
 };
 
-const formatBool = (v: boolean | undefined) => {
-  if (v === true) return 1;
-  if (v === false) return 0;
-  return "";
+const truncate = (str: string, len = 20) => {
+  if (!str) return "";
+  return str.length > len ? str.substring(0, len) + "..." : str;
 };
 
-const copyTable = async () => {
-  const baseCols = [
-    "學生編號",
-    "姓名",
-    "最後提交時間",
-    "公式輸出",
-    "題目數",
-    "通過測資數",
-  ];
-  const cols = [
-    ...baseCols,
-    ...flatGroupColumns.value.map(
-      (c) => `題目${c.puzzleId} 測資組 ${c.groupId}`
-    ),
-  ];
+// Selection
+const selectRecord = (r: StudentRecord) => {
+  selectedRecord.value = r;
+};
 
-  const lines = filtered.value.map((r) => {
-    const base = [
-      r.student_ID,
-      r.student_name,
-      formatTime(r.last_submit_time),
-      formulaOutputs.value[r.id] ?? "",
-      String(r.puzzle_amount),
-      String(r.passed_puzzle_amount),
-    ];
-    const groups = flatGroupColumns.value.map((c) =>
-      formatBool(groupResults.value[r.id]?.[c.key])
-    );
-    return [...base, ...groups].join("\t");
+// Formula Logic
+const formulaOutputs = computed(() => {
+  const outs: Record<number, string> = {};
+  if (!formulaFn.value) return outs;
+
+  filteredRecords.value.forEach((r) => {
+    try {
+      outs[r.id] = String(formulaFn.value(r));
+    } catch (e) {
+      outs[r.id] = "Err";
+    }
   });
+  return outs;
+});
 
-  const tsv = [cols.join("\t"), ...lines].join("\n");
+const openFormulaModal = () => {
+  showFormulaModal.value = true;
+};
+const closeFormulaModal = () => (showFormulaModal.value = false);
 
+const tryApplyFormula = (code: string, save = true) => {
   try {
-    await navigator.clipboard.writeText(tsv);
-    alert("已複製表格（TSV），可直接貼到 Excel");
-  } catch (err) {
+    const fn = new Function("record", code) as (r: StudentRecord) => any;
+    // Test run
+    fn({
+      id: 0,
+      student_ID: "",
+      student_name: "",
+      last_submit_time: null,
+      subtask_amount: 0,
+      passed_subtask_amount: 0,
+      puzzle_amount: 0,
+      passed_puzzle_amount: 0,
+      puzzle_results: {},
+    });
+
+    formulaFn.value = fn;
+    formulaError.value = "";
+    if (save) {
+      localStorage.setItem(LOCAL_STORAGE_KEY, code);
+      showFormulaModal.value = false;
+    }
+  } catch (err: any) {
     console.error(err);
-    alert("複製失敗，請確認瀏覽器權限或手動複製");
+    formulaError.value = err.message || "語法錯誤";
+  }
+};
+const applyFormula = () => {
+  tryApplyFormula(formulaCode.value, true);
+};
+const resetDefaultFormula = () => {
+  formulaCode.value = defaultFormula;
+};
+
+// Copy Table
+const copyTable = async () => {
+  try {
+    // Headers
+    const headers = [
+      "ID",
+      "Name",
+      ...puzzleIds.value.flatMap((pid) =>
+        Array.from({ length: subtaskCounts.value[pid] || 0 }).map(
+          (_, i) => `P${Number(pid) + 1}-S${i + 1}`,
+        ),
+      ),
+      "Puzzles",
+      "Passed Subtasks",
+      "Score",
+      "Time",
+    ];
+
+    const rows = filteredRecords.value.map((r) => {
+      const puzzleCells = puzzleIds.value.flatMap((pid) => {
+        const count = subtaskCounts.value[pid] || 0;
+        return Array.from({ length: count }).map((_, i) =>
+          getAggregatedStatus(r, pid, i),
+        );
+      });
+      return [
+        r.student_ID,
+        r.student_name,
+        ...puzzleCells,
+        r.puzzle_amount,
+        r.passed_subtask_amount,
+        formulaOutputs.value[r.id],
+        r.last_submit_time,
+      ].join("\t");
+    });
+
+    const text = [headers.join("\t"), ...rows].join("\n");
+    await navigator.clipboard.writeText(text);
+    alert("已複製到剪貼簿 (Excel format)");
+  } catch (e) {
+    alert("複製失敗");
   }
 };
 </script>
-
-<style scoped>
-.page {
-  padding: 24px;
-  max-width: 90%;
-  margin: 0 auto;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
-    sans-serif;
-}
-.header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-input {
-  padding: 8px 10px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  min-width: 220px;
-}
-button {
-  padding: 8px 12px;
-  border: 1px solid #ccc;
-  background: #fff;
-  border-radius: 6px;
-  cursor: pointer;
-}
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.error {
-  color: #d93025;
-  margin-bottom: 8px;
-}
-.hint {
-  color: #555;
-  margin: 8px 0;
-}
-.table-wrapper {
-  overflow: auto;
-  border: 1px solid #eee;
-  border-radius: 8px;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-th,
-td {
-  border: 1px solid #e6e6e6;
-  padding: 8px 10px;
-  text-align: left;
-  white-space: nowrap;
-}
-th {
-  background: #f7f7f7;
-}
-.formula-cell {
-  color: #0b7285;
-  font-weight: 600;
-}
-
-/* row select */
-tbody tr.selected {
-  background: #e7f1ff;
-}
-
-/* Modal */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  z-index: 1000;
-}
-.modal {
-  background: #fff;
-  border-radius: 8px;
-  width: min(720px, 100%);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.16);
-  display: flex;
-  flex-direction: column;
-  max-height: 90vh;
-}
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #eee;
-}
-.modal-body {
-  padding: 12px 16px;
-  overflow: auto;
-}
-.modal-footer {
-  padding: 12px 16px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  border-top: 1px solid #eee;
-}
-.modal .close {
-  border: none;
-  background: transparent;
-  font-size: 16px;
-  cursor: pointer;
-}
-.modal textarea {
-  width: 100%;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  padding: 10px;
-  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo,
-    monospace;
-  resize: vertical;
-}
-.tip {
-  margin-bottom: 8px;
-  color: #444;
-  font-size: 13px;
-}
-</style>
