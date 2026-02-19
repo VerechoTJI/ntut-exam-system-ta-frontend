@@ -1,85 +1,40 @@
-<template>
-  <div class="page">
-    <header class="header">
-      <h3>所有學生 Log</h3>
-      <!-- 修正: 拆分為三個篩選區塊 -->
-      <div class="filters">
-        <div class="filter-group">
-          <label>學號:</label>
-          <input
-            v-model="filterStudentId"
-            placeholder="篩選學號..."
-            @keyup.enter="fetchAll"
-          />
-        </div>
-        <div class="filter-group">
-          <label>IP / Mac:</label>
-          <input
-            v-model="filterNet"
-            placeholder="篩選 IP 或 Mac..."
-            @keyup.enter="fetchAll"
-          />
-        </div>
-        <div class="filter-group">
-          <label>內容 / 類型:</label>
-          <input
-            v-model="filterContent"
-            placeholder="篩選內容或類型..."
-            @keyup.enter="fetchAll"
-          />
-        </div>
-        <button :disabled="loading" @click="fetchAll">
-          {{ loading ? "載入中..." : "手動刷新" }}
-        </button>
-      </div>
-    </header>
-
-    <div v-if="error" class="error">{{ error }}</div>
-    <div v-if="loading" class="hint">載入中...</div>
-    <div v-if="!loading && filtered.length === 0 && !error" class="hint">
-      尚無資料
-    </div>
-    <div class="table-wrapper" v-if="!loading && filtered.length > 0">
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>時間</th>
-            <th>學生</th>
-            <th>IP</th>
-            <!-- 新增 Mac 欄位 -->
-            <th>Mac</th>
-            <th>類型</th>
-            <th>內容</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="log in filtered" :key="log.id">
-            <td>{{ log.id }}</td>
-            <td>{{ formatTime(log.timestamp) }}</td>
-            <td>{{ log.student_ID || "—" }}</td>
-            <td>{{ log.ip_address }}</td>
-            <!-- 新增顯示 Mac Address -->
-            <td>{{ log.mac_address || "—" }}</td>
-            <td>{{ log.action_type }}</td>
-            <td class="pre">{{ log.details }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { onMounted, ref, computed } from "vue";
 import { useSystemLogStore } from "../stores/systemLogStore";
 
 const store = useSystemLogStore();
 
-// 修正: 拆分三個篩選變數
 const filterStudentId = ref("");
 const filterNet = ref("");
 const filterContent = ref("");
+
+const loading = computed(() => store.isLoading);
+const error = computed(() => store.error);
+const filtered = computed(() => {
+  const sid = filterStudentId.value.trim().toLowerCase();
+  const net = filterNet.value.trim().toLowerCase();
+  const content = filterContent.value.trim().toLowerCase();
+
+  return store.logs.filter((log) => {
+    // 1. Filter Student ID
+    if (sid && !log.student_id?.toLowerCase().includes(sid)) return false;
+    // 2. Filter IP / Mac
+    if (net) {
+      const ipMatch = log.ipAddress?.toLowerCase().includes(net);
+      const macMatch = log.mac?.toLowerCase().includes(net);
+      if (!ipMatch && !macMatch) return false;
+    }
+    // 3. Filter Content / Type
+    if (content) {
+      const msgMatch = (log.message || log.messeage)
+        ?.toLowerCase()
+        .includes(content);
+      const typeMatch = log.type?.toLowerCase().includes(content);
+      if (!msgMatch && !typeMatch) return false;
+    }
+    return true;
+  });
+});
 
 const formatTime = (iso: string | null | undefined) => {
   if (!iso) return "—";
@@ -102,125 +57,297 @@ const fetchAll = async () => {
   await store.fetchAllLogs();
 };
 
-const loading = computed(() => store.isLoading);
-const error = computed(() => store.error);
-// Copy and sort logs locally for display
-const logs = computed(() => {
-  return [...store.logs].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-  );
+onMounted(() => {
+  fetchAll();
 });
-
-// 修正: 更新篩選邏輯，同時滿足三個條件
-const filtered = computed(() => {
-  const kwId = filterStudentId.value.trim().toLowerCase();
-  const kwNet = filterNet.value.trim().toLowerCase();
-  const kwContent = filterContent.value.trim().toLowerCase();
-
-  return logs.value.filter((r) => {
-    // 1. 篩選學號
-    const matchId = !kwId || (r.student_ID || "").toLowerCase().includes(kwId);
-
-    // 2. 篩選 IP 或 Mac
-    const matchNet =
-      !kwNet ||
-      (r.ip_address || "").toLowerCase().includes(kwNet) ||
-      (r.mac_address || "").toLowerCase().includes(kwNet);
-
-    // 3. 篩選 內容 或 類型
-    const matchContent =
-      !kwContent ||
-      (r.action_type || "").toLowerCase().includes(kwContent) ||
-      (r.details || "").toLowerCase().includes(kwContent);
-
-    return matchId && matchNet && matchContent;
-  });
-});
-
-onMounted(fetchAll);
 </script>
 
-<style scoped>
-.page {
-  padding: 16px;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-}
-.header {
-  display: flex;
-  flex-direction: column; /* 改為垂直排列標題與篩選器 */
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.filters {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end; /* 對齊底部讓按鈕跟輸入框水平一致 */
-  flex-wrap: wrap;
-  background: #f9f9f9;
-  padding: 12px;
-  border-radius: 8px;
-  border: 1px solid #eee;
-}
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.filter-group label {
-  font-size: 12px;
-  color: #666;
-  font-weight: 500;
-}
-input {
-  padding: 6px 8px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  min-width: 150px;
-}
-button {
-  padding: 6px 12px;
-  border: 1px solid #ccc;
-  background: #fff;
-  border-radius: 6px;
-  cursor: pointer;
-  height: 30px; /* 確保與 input 高度接近 */
-}
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.error {
-  color: #d93025;
-  margin-bottom: 8px;
-}
-.hint {
-  color: #555;
-  margin: 8px 0;
-}
-.table-wrapper {
-  overflow: auto;
-  border: 1px solid #eee;
-  border-radius: 6px;
-}
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-th,
-td {
-  border: 1px solid #e6e6e6;
-  padding: 6px 8px;
-  text-align: left;
-  white-space: nowrap;
-}
-th {
-  background: #f7f7f7;
-}
-.pre {
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-width: 400px; /* 限制內容寬度避免撐開表格 */
-}
-</style>
+<template>
+  <div class="space-y-6">
+    <!-- Header & Filter -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+      <div
+        class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6"
+      >
+        <div>
+          <h3 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="text-blue-500"
+            >
+              <path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" x2="8" y1="13" y2="13" />
+              <line x1="16" x2="8" y1="17" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+            System Logs
+          </h3>
+          <p class="text-gray-500 text-sm mt-1">
+            View and filter student activity logs
+          </p>
+        </div>
+        <button
+          @click="fetchAll"
+          :disabled="loading"
+          class="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium disabled:opacity-50"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            :class="{ 'animate-spin': loading }"
+          >
+            <path d="M21 2v6h-6" />
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+            <path d="M3 22v-6h6" />
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+          </svg>
+          {{ loading ? "Refreshing..." : "Refresh Logs" }}
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="space-y-1">
+          <label
+            class="text-xs font-semibold text-gray-500 uppercase tracking-wider"
+            >Student ID</label
+          >
+          <div class="relative">
+            <input
+              v-model="filterStudentId"
+              type="text"
+              placeholder="Filter by ID..."
+              @keyup.enter="fetchAll"
+              class="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+            />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="absolute left-3 top-2.5 text-gray-400"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label
+            class="text-xs font-semibold text-gray-500 uppercase tracking-wider"
+            >Network (IP/Mac)</label
+          >
+          <div class="relative">
+            <input
+              v-model="filterNet"
+              type="text"
+              placeholder="Filter by Net..."
+              @keyup.enter="fetchAll"
+              class="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+            />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="absolute left-3 top-2.5 text-gray-400"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" x2="22" y1="12" y2="12" />
+              <path
+                d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"
+              />
+            </svg>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label
+            class="text-xs font-semibold text-gray-500 uppercase tracking-wider"
+            >Content / Type</label
+          >
+          <div class="relative">
+            <input
+              v-model="filterContent"
+              type="text"
+              placeholder="Filter details..."
+              @keyup.enter="fetchAll"
+              class="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+            />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="absolute left-3 top-2.5 text-gray-400"
+            >
+              <path d="M4 21v-8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8" />
+              <path
+                d="M4 10a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8l-4-4-4 4-4-4-4 4v-8z"
+              />
+              <path
+                d="M2 2h20a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div
+      v-if="error"
+      class="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-md flex items-center gap-3"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="text-red-500"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" x2="12" y1="8" y2="12" />
+        <line x1="12" x2="12.01" y1="16" y2="16" />
+      </svg>
+      <span class="text-sm font-medium text-red-700">{{ error }}</span>
+    </div>
+
+    <!-- Empty State -->
+    <div
+      v-if="!loading && filtered.length === 0 && !error"
+      class="bg-gray-50 rounded-xl border-dashed border-2 border-gray-200 p-12 flex flex-col items-center justify-center text-center"
+    >
+      <div
+        class="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="24"
+          height="24"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="text-gray-400"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+      </div>
+      <p class="text-gray-500 font-medium">No logs match your filter</p>
+    </div>
+
+    <!-- Table -->
+    <div
+      v-if="filtered.length > 0"
+      class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+    >
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-gray-50 text-gray-500">
+            <tr>
+              <th class="px-6 py-3 font-medium border-b border-gray-100 w-24">
+                ID
+              </th>
+              <th class="px-6 py-3 font-medium border-b border-gray-100 w-40">
+                Time
+              </th>
+              <th class="px-6 py-3 font-medium border-b border-gray-100 w-32">
+                Student
+              </th>
+              <th class="px-6 py-3 font-medium border-b border-gray-100 w-48">
+                Network
+              </th>
+              <th class="px-6 py-3 font-medium border-b border-gray-100 w-32">
+                Type
+              </th>
+              <th class="px-6 py-3 font-medium border-b border-gray-100">
+                Message
+              </th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <tr
+              v-for="log in filtered"
+              :key="log.id"
+              class="hover:bg-gray-50/50 transition-colors"
+            >
+              <td class="px-6 py-4 font-mono text-xs text-gray-400">
+                #{{ log.id }}
+              </td>
+              <td class="px-6 py-4 text-gray-500 whitespace-nowrap text-xs">
+                {{ formatTime(log.time) }}
+              </td>
+              <td class="px-6 py-4 font-medium text-gray-900">
+                {{ log.student_id }}
+              </td>
+              <td class="px-6 py-4">
+                <div class="flex flex-col text-xs">
+                  <span class="font-mono text-gray-600">{{
+                    log.ipAddress
+                  }}</span>
+                  <span class="font-mono text-gray-400" v-if="log.mac">{{
+                    log.mac
+                  }}</span>
+                </div>
+              </td>
+              <td class="px-6 py-4">
+                <span
+                  class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200 whitespace-nowrap"
+                >
+                  {{ log.type }}
+                </span>
+              </td>
+              <td
+                class="px-6 py-4 text-gray-600 font-mono text-xs break-all leading-relaxed"
+              >
+                {{ log.messeage || log.message }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</template>
