@@ -4,10 +4,15 @@
 
     <!-- Status Bar -->
     <div
-      class="bg-white rounded-lg shadow p-4 mb-6 flex items-center justify-between"
+      class="bg-white rounded-lg shadow p-4 mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
     >
-      <div class="flex items-center space-x-4">
-        <span class="font-semibold text-gray-700">System Status:</span>
+      <div
+        class="flex flex-col gap-2 text-center md:text-left md:flex-row md:items-center md:gap-4"
+      >
+        <span
+          class="font-semibold text-gray-700 text-sm uppercase tracking-wide"
+          >System Status</span
+        >
         <span
           :class="[
             'px-3 py-1 rounded-full text-sm font-medium',
@@ -21,11 +26,13 @@
           }}
         </span>
       </div>
-      <div class="space-x-4">
+      <div
+        class="flex flex-col gap-2 w-full sm:flex-row sm:flex-wrap sm:justify-end md:w-auto"
+      >
         <button
           @click="toggleExamStatus"
           :class="[
-            'px-4 py-2 rounded text-white font-medium transition-colors',
+            'px-4 py-2 rounded text-white font-medium transition-colors w-full sm:w-auto',
             examStore.isExamStarted
               ? 'bg-red-500 hover:bg-red-600'
               : 'bg-green-500 hover:bg-green-600',
@@ -36,14 +43,14 @@
         </button>
         <button
           @click="confirmReset"
-          class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded font-medium transition-colors"
+          class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded font-medium transition-colors w-full sm:w-auto"
           :disabled="examStore.isLoading"
         >
           Reset System
         </button>
         <button
           @click="doInitialize"
-          class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-medium transition-colors"
+          class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-medium transition-colors w-full sm:w-auto"
           :disabled="examStore.isLoading || !localConfig"
         >
           Init System
@@ -316,11 +323,13 @@
                   :disabled="examStore.isExamStarted"
                   class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
                 >
-                  <option value="python">Python</option>
-                  <option value="c">C</option>
-                  <option value="cpp">C++</option>
-                  <option value="java">Java</option>
-                  <option value="javascript">JavaScript</option>
+                  <option
+                    v-for="option in LANGUAGE_OPTIONS"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
                 </select>
               </div>
               <div>
@@ -635,6 +644,42 @@ import { ZodError } from "zod";
 import { io } from "socket.io-client";
 import { BASE_URL } from "../utilities/api";
 
+const LANGUAGE_OPTIONS = [
+  { label: "Python", value: "Python" },
+  { label: "C", value: "C" },
+  { label: "C++", value: "C++" },
+  { label: "Java", value: "Java" },
+  { label: "JavaScript", value: "JavaScript" },
+] as const;
+
+const LANGUAGE_ALIAS_MAP: Record<string, string> = {
+  python: "Python",
+  py: "Python",
+  c: "C",
+  cpp: "C++",
+  "c++": "C++",
+  java: "Java",
+  javascript: "JavaScript",
+  js: "JavaScript",
+};
+
+const DEFAULT_LANGUAGE = LANGUAGE_OPTIONS[0].value;
+
+function normalizeLanguageValue(language?: string | null): string {
+  if (!language) return DEFAULT_LANGUAGE;
+  const trimmed = language.trim();
+  if (!trimmed) return DEFAULT_LANGUAGE;
+  const aliasKey = trimmed.toLowerCase();
+  return LANGUAGE_ALIAS_MAP[aliasKey] ?? trimmed;
+}
+
+function normalizeConfigLanguages(config: ExamConfig | null) {
+  if (!config) return;
+  config.puzzles.forEach((puzzle) => {
+    puzzle.language = normalizeLanguageValue(puzzle.language);
+  });
+}
+
 const examStore = useExamStore();
 const messageStore = useMessageStore();
 const localConfig = ref<ExamConfig | null>(null);
@@ -643,9 +688,29 @@ const csvImportText = ref("");
 const showResetModal = ref(false);
 const showUpdateConfirmModal = ref(false);
 
-const hasUnsavedChanges = computed(() => {
-  return JSON.stringify(localConfig.value) !== JSON.stringify(examStore.config);
+const normalizedStoreConfig = computed<ExamConfig | null>(() => {
+  if (!examStore.config) return null;
+  const cloned = JSON.parse(JSON.stringify(examStore.config)) as ExamConfig;
+  normalizeConfigLanguages(cloned);
+  return cloned;
 });
+
+const hasUnsavedChanges = computed(() => {
+  if (!localConfig.value && !normalizedStoreConfig.value) {
+    return false;
+  }
+  return (
+    JSON.stringify(localConfig.value) !==
+    JSON.stringify(normalizedStoreConfig.value)
+  );
+});
+
+function getNormalizedConfigSnapshot(): ExamConfig | null {
+  if (!localConfig.value) return null;
+  const cloned = JSON.parse(JSON.stringify(localConfig.value)) as ExamConfig;
+  normalizeConfigLanguages(cloned);
+  return cloned;
+}
 
 onMounted(async () => {
   await examStore.fetchStatus();
@@ -657,8 +722,9 @@ watch(
   () => examStore.config,
   (newConfig) => {
     if (newConfig) {
-      // Deep copy
-      localConfig.value = JSON.parse(JSON.stringify(newConfig));
+      const cloned = JSON.parse(JSON.stringify(newConfig)) as ExamConfig;
+      normalizeConfigLanguages(cloned);
+      localConfig.value = cloned;
     } else {
       localConfig.value = null;
     }
@@ -688,6 +754,7 @@ async function handleFileUpload(event: Event) {
       const parsed = examConfigSchema.parse(json);
 
       // Update local config immediately for review before saving
+      normalizeConfigLanguages(parsed);
       localConfig.value = parsed;
       // Also save directly if desired, but user might want to edit first.
       // Requirement "allowing user to upload... check config type".
@@ -752,7 +819,7 @@ function importUsersFromCSV() {
 function addPuzzle() {
   localConfig.value?.puzzles.push({
     title: "New Puzzle",
-    language: "python", // default
+    language: DEFAULT_LANGUAGE,
     subtasks: [],
   });
 }
@@ -792,9 +859,10 @@ function removeTestCase(
 
 // Save Actions
 async function saveFullConfig() {
-  if (!localConfig.value) return;
+  const snapshot = getNormalizedConfigSnapshot();
+  if (!snapshot) return;
   try {
-    const parsed = examConfigSchema.parse(localConfig.value);
+    const parsed = examConfigSchema.parse(snapshot);
 
     if (examStore.config) {
       await examStore.updateConfig(parsed);
@@ -830,7 +898,8 @@ async function performReset() {
 }
 
 async function doInitialize() {
-  if (!localConfig.value) {
+  const snapshot = getNormalizedConfigSnapshot();
+  if (!snapshot) {
     alert("Please create or load a configuration first.");
     return;
   }
@@ -843,7 +912,7 @@ async function doInitialize() {
   }
 
   try {
-    const parsed = examConfigSchema.parse(localConfig.value);
+    const parsed = examConfigSchema.parse(snapshot);
     await examStore.initializeSystem(parsed);
     alert("System initialized successfully!");
   } catch (err: any) {
@@ -861,10 +930,11 @@ function confirmTestCaseUpdate() {
 }
 
 async function performTestCaseUpdate() {
-  if (!localConfig.value) return;
+  const snapshot = getNormalizedConfigSnapshot();
+  if (!snapshot) return;
   try {
     // Send the full config
-    const parsed = examConfigSchema.parse(localConfig.value);
+    const parsed = examConfigSchema.parse(snapshot);
     await examStore.updateTestCase(parsed);
 
     // Notify students via messageStore

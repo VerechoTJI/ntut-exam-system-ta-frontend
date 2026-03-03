@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { useStudentDashboardStore } from "../stores/studentDashboardStore";
+import { useUserStore } from "../stores/userStore";
 import CodeViewer from "../components/CodeViewer.vue";
 
 const dashboardStore = useStudentDashboardStore();
+const userStore = useUserStore();
 const searchID = ref("");
 const selectedTestCase = ref<any>(null);
+const deviceInfo = ref<{ ip: string; mac: string } | null>(null);
+const cryptoExisting = ref(false);
 
 onMounted(() => {
   dashboardStore.fetchSubmittedStudents();
@@ -19,6 +23,10 @@ const handleSearch = async () => {
   await Promise.all([
     dashboardStore.fetchStudentScore(searchID.value),
     dashboardStore.fetchStudentCode(searchID.value),
+    getUserDeviceInfo({studentID: searchID.value}),
+    userStore.isUserCryptoExisting(searchID.value).then(exists => {
+      cryptoExisting.value = exists;
+    }),  
   ]);
 };
 
@@ -38,6 +46,29 @@ const showTestCaseDetail = (tc: any) => {
 
 const closeModal = () => {
   selectedTestCase.value = null;
+};
+
+const handleDeleteUserCrypto = async () => {
+  if (!searchID.value) return;
+  if (
+    !confirm(
+      `Are you sure you want to delete the crypto for student ${searchID.value}? This action cannot be undone.`
+    )
+  )
+    return;
+
+  await userStore.destroyCrypto(searchID.value);
+};
+
+const getUserDeviceInfo = async (user: any) => {
+  if (!user) return "Unknown Device";
+  const info = await userStore.getDeviceInfo(user.studentID);
+  console.log("Device info for user", user.studentID, info);
+  if (!info) return "Unknown Device";
+  deviceInfo.value = {
+    ip: info.ip || "Unknown IP",
+    mac: info.mac || "Unknown MAC",
+  };
 };
 
 const isSubtaskPassed = (sub: any) => {
@@ -211,85 +242,73 @@ const getStatusCodeBg = (status: string) => {
     >
       <!-- Student Header -->
       <div
-        class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+        class="bg-gradient-to-r from-white to-blue-50 rounded-xl p-6 shadow-sm border border-gray-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6"
       >
-        <div>
-          <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
-            {{ dashboardStore.currentStudentScore?.student_name || "Student" }}
-            <span
-              class="text-base font-normal text-gray-500 font-mono bg-gray-100 px-2 py-1 rounded"
-              >{{ searchID }}</span
-            >
+        <div class="flex-1">
+          <h1 class="text-3xl font-bold text-gray-900 flex items-center gap-3 mb-4">
+        {{ dashboardStore.currentStudentScore?.student_name || "Student" }}
+        <span
+          class="text-lg font-mono text-blue-600 bg-blue-100 px-3 py-1.5 rounded-md font-medium"
+          >{{ searchID }}</span
+        >
           </h1>
-          <div class="flex items-center gap-4 mt-2 text-sm text-gray-500">
-            <span class="flex items-center gap-1.5">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              Last submitted:
-              {{
-                formatTime(dashboardStore.currentStudentScore?.last_submit_time)
-              }}
-            </span>
-            <span
-              v-if="dashboardStore.currentStudentScore"
-              class="flex items-center gap-1.5"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-              Passed:
-              {{ dashboardStore.currentStudentScore.passed_subtask_amount }} /
-              {{ dashboardStore.currentStudentScore.subtask_amount }} Subtasks
-            </span>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-600">
+        <span class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-100">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          <span class="font-medium">Last submitted:</span>
+          <span class="font-mono">{{ formatTime(dashboardStore.currentStudentScore?.last_submit_time) }}</span>
+        </span>
+        <span v-if="dashboardStore.currentStudentScore" class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-100">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-500">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+            <polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          <span class="font-medium">Passed:</span>
+          <span class="font-bold text-emerald-600">{{ dashboardStore.currentStudentScore.passed_subtask_amount }}/{{ dashboardStore.currentStudentScore.subtask_amount }}</span>
+        </span>
+        <span v-if="dashboardStore.currentStudentScore" class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-100">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-500">
+            <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+            <path d="M16 3h-1a4 4 0 0 0-4 4v1" />
+          </svg>
+          <span class="font-mono text-xs">{{ deviceInfo?.ip || "Unknown" }} | {{ deviceInfo?.mac || "Unknown" }}</span>
+        </span>
+        <span v-if="dashboardStore.currentStudentScore" class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-gray-100">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" :class="cryptoExisting ? 'text-green-500' : 'text-red-500'">
+            <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z" />
+            <path d="M12 6v6l4 2" />
+          </svg>
+          <span class="font-medium">Crypto:</span>
+          <span :class="cryptoExisting ? 'text-green-600 font-bold' : 'text-red-600 font-bold'">{{ cryptoExisting ? "✓ Existing" : "✕ Missing" }}</span>
+        </span>
           </div>
         </div>
-        <button
-          @click="handleJudge"
-          :disabled="dashboardStore.isLoading"
-          class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium shadow-sm hover:shadow transition-all flex items-center gap-2 transform active:scale-95"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+        <div class="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+          <button
+        @click="handleJudge"
+        :disabled="dashboardStore.isLoading"
+        class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95"
           >
-            <polygon
-              points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"
-            />
-          </svg>
-          Re-Judge
-        </button>
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+        Re-Judge
+          </button>
+          <button
+        @click="handleDeleteUserCrypto"
+        :disabled="dashboardStore.isLoading"
+        class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95"
+          >
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M9 6v12m6-12v12M4 6l1 14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2l1-14" />
+        </svg>
+        Delete Crypto
+          </button>
+        </div>
       </div>
-
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[700px]">
         <!-- Score Column -->
         <div class="flex flex-col gap-6 h-full overflow-hidden">
