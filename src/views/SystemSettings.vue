@@ -271,24 +271,10 @@
                 </div>
               </div>
 
-              <div class="mt-3">
-                <label class="block text-xs font-medium text-gray-500 uppercase"
-                  >Params (JSON)</label
-                >
-                <textarea
-                  :value="JSON.stringify(r.params ?? {}, null, 2)"
-                  @input="(e) => onRuleParamsInput(r, (e.target as HTMLTextAreaElement).value)"
-                  :disabled="examStore.isExamStarted"
-                  rows="4"
-                  class="mt-1 w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2 border font-mono"
-                ></textarea>
-                <div
-                  v-if="getRuleParamsError(r.id)"
-                  class="text-[11px] text-red-700 mt-1"
-                >
-                  {{ getRuleParamsError(r.id) }}
-                </div>
-              </div>
+              <SpecialRuleParamsEditor
+                :rule="r"
+                :disabled="examStore.isExamStarted"
+              />
             </div>
           </div>
         </div>
@@ -578,24 +564,10 @@
                     </div>
                   </div>
 
-                  <div class="mt-3">
-                    <label class="block text-xs font-medium text-gray-500 uppercase"
-                      >Params (JSON)</label
-                    >
-                    <textarea
-                      :value="JSON.stringify(r.params ?? {}, null, 2)"
-                      @input="(e) => onRuleParamsInput(r, (e.target as HTMLTextAreaElement).value)"
-                      :disabled="examStore.isExamStarted"
-                      rows="4"
-                      class="mt-1 w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2 border font-mono"
-                    ></textarea>
-                    <div
-                      v-if="getRuleParamsError(r.id)"
-                      class="text-[11px] text-red-700 mt-1"
-                    >
-                      {{ getRuleParamsError(r.id) }}
-                    </div>
-                  </div>
+                  <SpecialRuleParamsEditor
+                    :rule="r"
+                    :disabled="examStore.isExamStarted"
+                  />
                 </div>
               </div>
             </div>
@@ -882,6 +854,7 @@ import {
   examConfigSchema,
 } from "../stores/examStore";
 import { createDefaultSpecialRule } from "../specialRules/defaults";
+import SpecialRuleParamsEditor from "../components/SpecialRuleParamsEditor.vue";
 import { useMessageStore } from "../stores/messegeStore";
 import { ZodError } from "zod";
 
@@ -930,11 +903,6 @@ const showResetModal = ref(false);
 const showUpdateConfirmModal = ref(false);
 
 // Special rule editing helpers
-const ruleParamsErrors = ref(new Map<string, string>());
-
-function getRuleParamsError(ruleId: string): string | undefined {
-  return ruleParamsErrors.value.get(ruleId);
-}
 
 const normalizedStoreConfig = computed<ExamConfig | null>(() => {
   if (!examStore.config) return null;
@@ -1101,8 +1069,7 @@ function addGlobalSpecialRule() {
 
 function removeGlobalSpecialRule(ruleIndex: number) {
   if (!localConfig.value?.globalSpecialRules) return;
-  const removed = localConfig.value.globalSpecialRules.splice(ruleIndex, 1)[0];
-  if (removed) ruleParamsErrors.value.delete(removed.id);
+  localConfig.value.globalSpecialRules.splice(ruleIndex, 1);
 }
 
 function addPuzzleSpecialRule(pIdx: number) {
@@ -1117,17 +1084,7 @@ function removePuzzleSpecialRule(pIdx: number, ruleIndex: number) {
   if (!localConfig.value) return;
   const puzzle = localConfig.value.puzzles[pIdx];
   if (!puzzle?.specialRules) return;
-  const removed = puzzle.specialRules.splice(ruleIndex, 1)[0];
-  if (removed) ruleParamsErrors.value.delete(removed.id);
-}
-
-function onRuleParamsInput(rule: any, rawJson: string) {
-  try {
-    rule.params = rawJson.trim() ? JSON.parse(rawJson) : {};
-    ruleParamsErrors.value.delete(rule.id);
-  } catch (e: any) {
-    ruleParamsErrors.value.set(rule.id, e?.message ?? "Invalid JSON");
-  }
+  puzzle.specialRules.splice(ruleIndex, 1);
 }
 
 // Subtask Management

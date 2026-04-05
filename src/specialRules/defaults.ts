@@ -6,7 +6,7 @@ export function createDefaultSpecialRule(overrides?: Partial<SpecialRule>): Spec
     type: "regex",
     constraint: "MUST_NOT_HAVE",
     message: "",
-    severity: "warn",
+  severity: undefined,
     params: {
       pattern: "",
       flags: "",

@@ -12,7 +12,7 @@ describe("specialRules/defaults", () => {
   expect(rule.id).toBe("00000000-0000-0000-0000-000000000001");
     expect(rule.type).toBe("regex");
     expect(rule.constraint).toBe("MUST_NOT_HAVE");
-    expect(rule.severity).toBe("warn");
+  expect(rule.severity).toBe(undefined);
     expect(rule.params).toEqual({ pattern: "", flags: "" });
 
     spy.mockRestore();
