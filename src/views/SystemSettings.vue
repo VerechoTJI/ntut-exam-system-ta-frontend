@@ -171,6 +171,20 @@
           </div>
         </div>
 
+        <!-- Special Rules (Global) -->
+        <div class="mb-6">
+          <h3
+            class="font-medium text-gray-700 mb-3 uppercase text-xs tracking-wider"
+          >
+            Special Rules — Global
+          </h3>
+          <SpecialRulesList
+            title="Global special rules"
+            :rules="localConfig.globalSpecialRules"
+            empty-text="No global special rules configured."
+          />
+        </div>
+
         <!-- Users Section -->
         <details
           class="bg-white border rounded-lg mb-4"
@@ -356,6 +370,15 @@
                   placeholder="Default"
                 />
               </div>
+            </div>
+
+            <!-- Special Rules (Per puzzle) -->
+            <div class="px-4 py-3 border-b bg-white">
+              <SpecialRulesList
+                :title="`Special rules — Puzzle #${pIdx + 1}`"
+                :rules="puzzle.specialRules"
+                empty-text="No per-puzzle special rules configured."
+              />
             </div>
 
             <!-- Subtasks -->
@@ -634,6 +657,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from "vue";
+import SpecialRulesList from "../components/SpecialRulesList.vue";
 import {
   useExamStore,
   type ExamConfig,
@@ -641,8 +665,6 @@ import {
 } from "../stores/examStore";
 import { useMessageStore } from "../stores/messegeStore";
 import { ZodError } from "zod";
-import { io } from "socket.io-client";
-import { BASE_URL } from "../utilities/api";
 
 const LANGUAGE_OPTIONS = [
   { label: "Python", value: "Python" },
@@ -831,19 +853,30 @@ function removePuzzle(idx: number) {
 
 // Subtask Management
 function addSubtask(pIdx: number) {
-  localConfig.value?.puzzles[pIdx].subtasks.push({
+  if (!localConfig.value) return;
+  const puzzle = localConfig.value.puzzles[pIdx];
+  if (!puzzle) return;
+  puzzle.subtasks.push({
     title: "Group 1",
     visible: [],
     hidden: [],
   });
 }
 function removeSubtask(pIdx: number, sIdx: number) {
-  localConfig.value?.puzzles[pIdx].subtasks.splice(sIdx, 1);
+  if (!localConfig.value) return;
+  const puzzle = localConfig.value.puzzles[pIdx];
+  if (!puzzle) return;
+  puzzle.subtasks.splice(sIdx, 1);
 }
 
 // Test Case Management
 function addTestCase(pIdx: number, sIdx: number, type: "visible" | "hidden") {
-  localConfig.value?.puzzles[pIdx].subtasks[sIdx][type].push({
+  if (!localConfig.value) return;
+  const puzzle = localConfig.value.puzzles[pIdx];
+  if (!puzzle) return;
+  const subtask = puzzle.subtasks[sIdx];
+  if (!subtask) return;
+  subtask[type].push({
     input: "",
     output: "",
   });
@@ -854,7 +887,12 @@ function removeTestCase(
   type: "visible" | "hidden",
   tIdx: number,
 ) {
-  localConfig.value?.puzzles[pIdx].subtasks[sIdx][type].splice(tIdx, 1);
+  if (!localConfig.value) return;
+  const puzzle = localConfig.value.puzzles[pIdx];
+  if (!puzzle) return;
+  const subtask = puzzle.subtasks[sIdx];
+  if (!subtask) return;
+  subtask[type].splice(tIdx, 1);
 }
 
 // Save Actions
@@ -873,7 +911,7 @@ async function saveFullConfig() {
   } catch (err) {
     console.error(err);
     if (err instanceof ZodError) {
-      alert("Validation Failed: " + err.issues[0].message);
+  alert("Validation Failed: " + (err.issues[0]?.message ?? "Unknown error"));
     } else {
       alert("Failed to save configuration.");
     }
@@ -918,7 +956,7 @@ async function doInitialize() {
   } catch (err: any) {
     console.error(err);
     if (err instanceof ZodError) {
-      alert("Validation Failed: " + err.issues[0].message);
+  alert("Validation Failed: " + (err.issues[0]?.message ?? "Unknown error"));
     } else {
       alert("Failed to initialize system: " + (err.message || "Unknown error"));
     }
