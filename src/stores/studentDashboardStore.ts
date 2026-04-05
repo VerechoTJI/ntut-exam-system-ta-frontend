@@ -18,8 +18,11 @@ export const useStudentDashboardStore = defineStore("studentDashboard", {
     currentStudentCode: null as StudentCodeResponse | null,
     currentStudentScore: null as StudentRecord | null,
     judgeResult: null as ScoreBoardFormat | null,
-    isLoading: false,
-    error: null as string | null,
+  isLoading: false,
+  error: null as string | null,
+
+  isJudging: false,
+  judgeError: null as string | null,
   }),
 
   actions: {
@@ -77,8 +80,8 @@ export const useStudentDashboardStore = defineStore("studentDashboard", {
     },
 
     async judgeStudentCode(studentID: string) {
-      this.isLoading = true;
-      this.error = null;
+      this.isJudging = true;
+      this.judgeError = null;
       this.judgeResult = null;
       try {
         const response = await axios.post(`${BASE_URL}/code/judge`, {
@@ -92,9 +95,9 @@ export const useStudentDashboardStore = defineStore("studentDashboard", {
         }
       } catch (err: any) {
         console.error("Failed to judge student code:", err);
-        this.error = err.message || "Failed to execute judge";
+        this.judgeError = err.message || "Failed to execute judge";
       } finally {
-        this.isLoading = false;
+        this.isJudging = false;
       }
     },
 
@@ -103,6 +106,9 @@ export const useStudentDashboardStore = defineStore("studentDashboard", {
       this.currentStudentScore = null;
       this.judgeResult = null;
       this.error = null;
+
+  this.isJudging = false;
+  this.judgeError = null;
     },
   },
 });
