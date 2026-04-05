@@ -3,9 +3,12 @@ import { ref, onMounted } from "vue";
 import { useStudentDashboardStore } from "../stores/studentDashboardStore";
 import { useUserStore } from "../stores/userStore";
 import CodeViewer from "../components/CodeViewer.vue";
+import SpecialRulesStatusPanel from "../components/SpecialRulesStatusPanel.vue";
+import { useExamStore } from "../stores/examStore";
 
 const dashboardStore = useStudentDashboardStore();
 const userStore = useUserStore();
+const examStore = useExamStore();
 const searchID = ref("");
 const selectedTestCase = ref<any>(null);
 const deviceInfo = ref<{ ip: string; mac: string } | null>(null);
@@ -13,6 +16,7 @@ const cryptoExisting = ref(false);
 
 onMounted(() => {
   dashboardStore.fetchSubmittedStudents();
+  examStore.fetchConfig();
 });
 
 const handleSearch = async () => {
@@ -331,7 +335,7 @@ const getStatusCodeBg = (status: string) => {
               </div>
 
               <div
-                v-for="(subtasks, pid) in dashboardStore.currentStudentScore
+                v-for="(puzzleResult, pid) in dashboardStore.currentStudentScore
                   ?.puzzle_results"
                 :key="pid"
                 class="border border-gray-200 rounded-lg overflow-hidden"
@@ -342,9 +346,17 @@ const getStatusCodeBg = (status: string) => {
                   <span>Problem {{ Number(pid) + 1 }}</span>
                 </div>
 
+                <div class="px-4 py-3">
+                  <SpecialRulesStatusPanel
+                    :exam-config="examStore.config"
+                    :puzzle-index="Number(pid)"
+                    :special-rule-results="puzzleResult.specialRuleResults"
+                  />
+                </div>
+
                 <div class="divide-y divide-gray-100">
                   <div
-                    v-for="(sub, sIdx) in subtasks"
+                    v-for="(sub, sIdx) in puzzleResult.subtasks"
                     :key="sIdx"
                     class="p-4 hover:bg-gray-50/50 transition-colors"
                   >
