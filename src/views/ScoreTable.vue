@@ -216,7 +216,7 @@
     <!-- Detail Modal -->
     <div
       v-if="selectedRecord"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm"
       @click.self="selectedRecord = null"
     >
       <div
@@ -370,7 +370,7 @@
     <!-- Formula Modal -->
     <div
       v-if="showFormulaModal"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 "
       @click.self="closeFormulaModal"
     >
       <div

@@ -282,7 +282,7 @@
             class="px-4 py-3 cursor-pointer bg-gray-50 font-medium text-gray-700 focus:outline-none flex justify-between items-center"
           >
             <span
-              >Accessible Users ({{ localConfig.accessableUsers.length }})</span
+              >Accessible Users ({{ localConfig.accessibleUsers.length }})</span
             >
             <span class="text-xs text-gray-500" v-if="examStore.isExamStarted"
               >Locked</span
@@ -308,13 +308,13 @@
               class="max-h-60 overflow-y-auto mb-4 border rounded p-2 bg-gray-50"
             >
               <div
-                v-if="localConfig.accessableUsers.length === 0"
+                v-if="localConfig.accessibleUsers.length === 0"
                 class="text-gray-400 text-center py-4 text-sm"
               >
                 No users added
               </div>
               <div
-                v-for="(user, idx) in localConfig.accessableUsers"
+                v-for="(user, idx) in localConfig.accessibleUsers"
                 :key="idx"
                 class="flex gap-2 mb-2 items-center"
               >
@@ -779,7 +779,7 @@
     <!-- Reset Confirmation Modal -->
     <div
       v-if="showResetModal"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      class="fixed inset-0 flex items-center justify-center z-50 backdrop-blur-sm"
     >
       <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
         <h3 class="text-lg font-bold text-gray-900 mb-2">Reset System?</h3>
@@ -807,7 +807,7 @@
     <!-- Update Confirm Modal -->
     <div
       v-if="showUpdateConfirmModal"
-      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      class="fixed inset-0 flex items-center justify-center z-50 backdrop-blur-sm"
     >
       <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
         <h3 class="text-lg font-bold text-gray-900 mb-2">Confirm Update?</h3>
@@ -942,13 +942,14 @@ function createNewConfig() {
     testTitle: "New Exam",
     description: "",
     judgerSettings: { timeLimit: 1000, memoryLimit: 128 },
-    accessableUsers: [],
+    accessibleUsers: [],
     puzzles: [],
   };
 }
 
 async function handleFileUpload(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0];
+  const inputEl = event.target as HTMLInputElement;
+  const file = inputEl.files?.[0];
   if (!file) return;
 
   const reader = new FileReader();
@@ -980,6 +981,11 @@ async function handleFileUpload(event: Event) {
     }
   };
   reader.readAsText(file);
+
+  // Important UX fix: allow importing the *same* file twice.
+  // Browsers don't fire `change` if the chosen file path doesn't change,
+  // so we clear the input after reading.
+  inputEl.value = '';
 }
 
 function downloadConfig() {
@@ -997,13 +1003,13 @@ function downloadConfig() {
 
 // User Management
 function addUser() {
-  localConfig.value?.accessableUsers.push({ id: "", name: "" });
+  localConfig.value?.accessibleUsers.push({ id: "", name: "" });
 }
 function removeUser(idx: number) {
-  localConfig.value?.accessableUsers.splice(idx, 1);
+  localConfig.value?.accessibleUsers.splice(idx, 1);
 }
 function clearUsers() {
-  if (localConfig.value) localConfig.value.accessableUsers = [];
+  if (localConfig.value) localConfig.value.accessibleUsers = [];
 }
 function importUsersFromCSV() {
   if (!csvImportText.value || !localConfig.value) return;
@@ -1011,7 +1017,7 @@ function importUsersFromCSV() {
   lines.forEach((line) => {
     const [id, name] = line.split(",");
     if (id && name) {
-      localConfig.value!.accessableUsers.push({
+      localConfig.value!.accessibleUsers.push({
         id: id.trim(),
         name: name.trim(),
       });
