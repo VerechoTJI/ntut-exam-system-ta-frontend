@@ -173,16 +173,124 @@
 
         <!-- Special Rules (Global) -->
         <div class="mb-6">
-          <h3
-            class="font-medium text-gray-700 mb-3 uppercase text-xs tracking-wider"
+          <div class="flex items-center justify-between mb-3">
+            <h3
+              class="font-medium text-gray-700 uppercase text-xs tracking-wider"
+            >
+              Special Rules — Global
+            </h3>
+            <button
+              v-if="!examStore.isExamStarted"
+              type="button"
+              @click="addGlobalSpecialRule"
+              class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200"
+            >
+              + Add Global Rule
+            </button>
+          </div>
+
+          <div
+            v-if="(localConfig.globalSpecialRules?.length ?? 0) === 0"
+            class="text-sm text-gray-500"
           >
-            Special Rules — Global
-          </h3>
-          <SpecialRulesList
-            title="Global special rules"
-            :rules="localConfig.globalSpecialRules"
-            empty-text="No global special rules configured."
-          />
+            No global special rules configured.
+          </div>
+
+          <div class="space-y-3" v-else>
+            <div
+              v-for="(r, rIdx) in localConfig.globalSpecialRules"
+              :key="r.id"
+              class="rounded-lg border border-gray-200 bg-white p-3"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div class="text-[11px] text-gray-500 font-mono break-all">
+                  {{ r.id }}
+                </div>
+                <button
+                  v-if="!examStore.isExamStarted"
+                  type="button"
+                  @click="removeGlobalSpecialRule(rIdx)"
+                  class="text-xs text-red-600 hover:text-red-800"
+                >
+                  Delete
+                </button>
+              </div>
+
+              <div class="mt-2 grid grid-cols-1 md:grid-cols-5 gap-3">
+                <div class="md:col-span-2">
+                  <label class="block text-xs font-medium text-gray-500 uppercase"
+                    >Message</label
+                  >
+                  <input
+                    v-model="r.message"
+                    :disabled="examStore.isExamStarted"
+                    class="mt-1 w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2 border"
+                    placeholder="Rule message shown to TAs"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-500 uppercase"
+                    >Type</label
+                  >
+                  <select
+                    v-model="r.type"
+                    :disabled="examStore.isExamStarted"
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
+                  >
+                    <option value="regex">regex</option>
+                    <option value="use">use</option>
+                    <option value="composite">composite</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-500 uppercase"
+                    >Constraint</label
+                  >
+                  <select
+                    v-model="r.constraint"
+                    :disabled="examStore.isExamStarted"
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
+                  >
+                    <option value="MUST_HAVE">MUST_HAVE</option>
+                    <option value="MUST_NOT_HAVE">MUST_NOT_HAVE</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-500 uppercase"
+                    >Severity</label
+                  >
+                  <select
+                    v-model="r.severity"
+                    :disabled="examStore.isExamStarted"
+                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
+                  >
+                    <option :value="undefined">(none)</option>
+                    <option value="info">info</option>
+                    <option value="warn">warn</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="mt-3">
+                <label class="block text-xs font-medium text-gray-500 uppercase"
+                  >Params (JSON)</label
+                >
+                <textarea
+                  :value="JSON.stringify(r.params ?? {}, null, 2)"
+                  @input="(e) => onRuleParamsInput(r, (e.target as HTMLTextAreaElement).value)"
+                  :disabled="examStore.isExamStarted"
+                  rows="4"
+                  class="mt-1 w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2 border font-mono"
+                ></textarea>
+                <div
+                  v-if="getRuleParamsError(r.id)"
+                  class="text-[11px] text-red-700 mt-1"
+                >
+                  {{ getRuleParamsError(r.id) }}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Users Section -->
@@ -374,11 +482,122 @@
 
             <!-- Special Rules (Per puzzle) -->
             <div class="px-4 py-3 border-b bg-white">
-              <SpecialRulesList
-                :title="`Special rules — Puzzle #${pIdx + 1}`"
-                :rules="puzzle.specialRules"
-                empty-text="No per-puzzle special rules configured."
-              />
+              <div class="flex items-center justify-between">
+                <div class="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  Special Rules — Puzzle #{{ pIdx + 1 }}
+                </div>
+                <button
+                  v-if="!examStore.isExamStarted"
+                  type="button"
+                  @click="addPuzzleSpecialRule(pIdx)"
+                  class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200"
+                >
+                  + Add Rule
+                </button>
+              </div>
+
+              <div
+                v-if="(puzzle.specialRules?.length ?? 0) === 0"
+                class="text-sm text-gray-500 mt-2"
+              >
+                No per-puzzle special rules configured.
+              </div>
+
+              <div class="space-y-3 mt-3" v-else>
+                <div
+                  v-for="(r, rIdx) in puzzle.specialRules"
+                  :key="r.id"
+                  class="rounded-lg border border-gray-200 bg-white p-3"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="text-[11px] text-gray-500 font-mono break-all">
+                      {{ r.id }}
+                    </div>
+                    <button
+                      v-if="!examStore.isExamStarted"
+                      type="button"
+                      @click="removePuzzleSpecialRule(pIdx, rIdx)"
+                      class="text-xs text-red-600 hover:text-red-800"
+                    >
+                      Delete
+                    </button>
+                  </div>
+
+                  <div class="mt-2 grid grid-cols-1 md:grid-cols-5 gap-3">
+                    <div class="md:col-span-2">
+                      <label class="block text-xs font-medium text-gray-500 uppercase"
+                        >Message</label
+                      >
+                      <input
+                        v-model="r.message"
+                        :disabled="examStore.isExamStarted"
+                        class="mt-1 w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2 border"
+                        placeholder="Rule message shown to TAs"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-medium text-gray-500 uppercase"
+                        >Type</label
+                      >
+                      <select
+                        v-model="r.type"
+                        :disabled="examStore.isExamStarted"
+                        class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
+                      >
+                        <option value="regex">regex</option>
+                        <option value="use">use</option>
+                        <option value="composite">composite</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-medium text-gray-500 uppercase"
+                        >Constraint</label
+                      >
+                      <select
+                        v-model="r.constraint"
+                        :disabled="examStore.isExamStarted"
+                        class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
+                      >
+                        <option value="MUST_HAVE">MUST_HAVE</option>
+                        <option value="MUST_NOT_HAVE">MUST_NOT_HAVE</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-medium text-gray-500 uppercase"
+                        >Severity</label
+                      >
+                      <select
+                        v-model="r.severity"
+                        :disabled="examStore.isExamStarted"
+                        class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
+                      >
+                        <option :value="undefined">(none)</option>
+                        <option value="info">info</option>
+                        <option value="warn">warn</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="mt-3">
+                    <label class="block text-xs font-medium text-gray-500 uppercase"
+                      >Params (JSON)</label
+                    >
+                    <textarea
+                      :value="JSON.stringify(r.params ?? {}, null, 2)"
+                      @input="(e) => onRuleParamsInput(r, (e.target as HTMLTextAreaElement).value)"
+                      :disabled="examStore.isExamStarted"
+                      rows="4"
+                      class="mt-1 w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2 border font-mono"
+                    ></textarea>
+                    <div
+                      v-if="getRuleParamsError(r.id)"
+                      class="text-[11px] text-red-700 mt-1"
+                    >
+                      {{ getRuleParamsError(r.id) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Subtasks -->
@@ -657,12 +876,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from "vue";
-import SpecialRulesList from "../components/SpecialRulesList.vue";
 import {
   useExamStore,
   type ExamConfig,
   examConfigSchema,
 } from "../stores/examStore";
+import { createDefaultSpecialRule } from "../specialRules/defaults";
 import { useMessageStore } from "../stores/messegeStore";
 import { ZodError } from "zod";
 
@@ -709,6 +928,13 @@ const csvImportText = ref("");
 
 const showResetModal = ref(false);
 const showUpdateConfirmModal = ref(false);
+
+// Special rule editing helpers
+const ruleParamsErrors = ref(new Map<string, string>());
+
+function getRuleParamsError(ruleId: string): string | undefined {
+  return ruleParamsErrors.value.get(ruleId);
+}
 
 const normalizedStoreConfig = computed<ExamConfig | null>(() => {
   if (!examStore.config) return null;
@@ -848,6 +1074,59 @@ function addPuzzle() {
 function removePuzzle(idx: number) {
   if (confirm("Delete this puzzle?")) {
     localConfig.value?.puzzles.splice(idx, 1);
+  }
+}
+
+function ensureGlobalRulesArray() {
+  if (!localConfig.value) return;
+  if (!localConfig.value.globalSpecialRules) {
+    localConfig.value.globalSpecialRules = [];
+  }
+}
+
+function ensurePuzzleRulesArray(pIdx: number) {
+  if (!localConfig.value) return;
+  const puzzle = localConfig.value.puzzles[pIdx];
+  if (!puzzle) return;
+  if (!puzzle.specialRules) {
+    puzzle.specialRules = [];
+  }
+}
+
+function addGlobalSpecialRule() {
+  if (!localConfig.value) return;
+  ensureGlobalRulesArray();
+  localConfig.value.globalSpecialRules!.push(createDefaultSpecialRule());
+}
+
+function removeGlobalSpecialRule(ruleIndex: number) {
+  if (!localConfig.value?.globalSpecialRules) return;
+  const removed = localConfig.value.globalSpecialRules.splice(ruleIndex, 1)[0];
+  if (removed) ruleParamsErrors.value.delete(removed.id);
+}
+
+function addPuzzleSpecialRule(pIdx: number) {
+  if (!localConfig.value) return;
+  ensurePuzzleRulesArray(pIdx);
+  const puzzle = localConfig.value.puzzles[pIdx];
+  if (!puzzle?.specialRules) return;
+  puzzle.specialRules.push(createDefaultSpecialRule());
+}
+
+function removePuzzleSpecialRule(pIdx: number, ruleIndex: number) {
+  if (!localConfig.value) return;
+  const puzzle = localConfig.value.puzzles[pIdx];
+  if (!puzzle?.specialRules) return;
+  const removed = puzzle.specialRules.splice(ruleIndex, 1)[0];
+  if (removed) ruleParamsErrors.value.delete(removed.id);
+}
+
+function onRuleParamsInput(rule: any, rawJson: string) {
+  try {
+    rule.params = rawJson.trim() ? JSON.parse(rawJson) : {};
+    ruleParamsErrors.value.delete(rule.id);
+  } catch (e: any) {
+    ruleParamsErrors.value.set(rule.id, e?.message ?? "Invalid JSON");
   }
 }
 
