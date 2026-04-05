@@ -7,10 +7,10 @@ describe("special-rule-engine import (TA frontend)", () => {
             [
                 {
                     id: "r1",
-                    type: "includes",
+                    type: "use",
                     constraint: "MUST_NOT_HAVE",
                     message: "must not include eval",
-                    params: { needle: "eval" },
+                    params: { target: "eval" },
                 },
             ],
             { language: "javascript", sourceText: "const x = 1;" },
