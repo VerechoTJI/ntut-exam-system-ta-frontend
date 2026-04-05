@@ -180,7 +180,6 @@
               Special Rules — Global
             </h3>
             <button
-              v-if="!examStore.isExamStarted"
               type="button"
               @click="addGlobalSpecialRule"
               class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200"
@@ -207,7 +206,6 @@
                   {{ r.id }}
                 </div>
                 <button
-                  v-if="!examStore.isExamStarted"
                   type="button"
                   @click="removeGlobalSpecialRule(rIdx)"
                   class="text-xs text-red-600 hover:text-red-800"
@@ -223,7 +221,6 @@
                   >
                   <input
                     v-model="r.message"
-                    :disabled="examStore.isExamStarted"
                     class="mt-1 w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2 border"
                     placeholder="Rule message shown to TAs"
                   />
@@ -233,8 +230,8 @@
                     >Type</label
                   >
                   <select
-                    v-model="r.type"
-                    :disabled="examStore.isExamStarted"
+                    :value="r.type"
+                    @change="(e) => onRuleTypeChange(r, (e.target as HTMLSelectElement).value as any)"
                     class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
                   >
                     <option value="regex">regex</option>
@@ -248,7 +245,6 @@
                   >
                   <select
                     v-model="r.constraint"
-                    :disabled="examStore.isExamStarted"
                     class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
                   >
                     <option value="MUST_HAVE">MUST_HAVE</option>
@@ -261,7 +257,6 @@
                   >
                   <select
                     v-model="r.severity"
-                    :disabled="examStore.isExamStarted"
                     class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
                   >
                     <option :value="undefined">(none)</option>
@@ -273,7 +268,6 @@
 
               <SpecialRuleParamsEditor
                 :rule="r"
-                :disabled="examStore.isExamStarted"
               />
             </div>
           </div>
@@ -473,7 +467,6 @@
                   Special Rules — Puzzle #{{ pIdx + 1 }}
                 </div>
                 <button
-                  v-if="!examStore.isExamStarted"
                   type="button"
                   @click="addPuzzleSpecialRule(pIdx)"
                   class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200"
@@ -500,7 +493,6 @@
                       {{ r.id }}
                     </div>
                     <button
-                      v-if="!examStore.isExamStarted"
                       type="button"
                       @click="removePuzzleSpecialRule(pIdx, rIdx)"
                       class="text-xs text-red-600 hover:text-red-800"
@@ -516,7 +508,6 @@
                       >
                       <input
                         v-model="r.message"
-                        :disabled="examStore.isExamStarted"
                         class="mt-1 w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2 border"
                         placeholder="Rule message shown to TAs"
                       />
@@ -526,8 +517,8 @@
                         >Type</label
                       >
                       <select
-                        v-model="r.type"
-                        :disabled="examStore.isExamStarted"
+                        :value="r.type"
+                        @change="(e) => onRuleTypeChange(r, (e.target as HTMLSelectElement).value as any)"
                         class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
                       >
                         <option value="regex">regex</option>
@@ -541,7 +532,6 @@
                       >
                       <select
                         v-model="r.constraint"
-                        :disabled="examStore.isExamStarted"
                         class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
                       >
                         <option value="MUST_HAVE">MUST_HAVE</option>
@@ -554,7 +544,6 @@
                       >
                       <select
                         v-model="r.severity"
-                        :disabled="examStore.isExamStarted"
                         class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
                       >
                         <option :value="undefined">(none)</option>
@@ -566,7 +555,6 @@
 
                   <SpecialRuleParamsEditor
                     :rule="r"
-                    :disabled="examStore.isExamStarted"
                   />
                 </div>
               </div>
@@ -854,6 +842,7 @@ import {
   examConfigSchema,
 } from "../stores/examStore";
 import { createDefaultSpecialRule } from "../specialRules/defaults";
+import type { SpecialRule } from "../specialRules/types";
 import SpecialRuleParamsEditor from "../components/SpecialRuleParamsEditor.vue";
 import { useMessageStore } from "../stores/messegeStore";
 import { ZodError } from "zod";
@@ -1085,6 +1074,25 @@ function removePuzzleSpecialRule(pIdx: number, ruleIndex: number) {
   const puzzle = localConfig.value.puzzles[pIdx];
   if (!puzzle?.specialRules) return;
   puzzle.specialRules.splice(ruleIndex, 1);
+}
+
+function onRuleTypeChange(rule: SpecialRule, nextType: SpecialRule["type"]) {
+  // Normalize params when switching types so we never keep stale keys
+  // like { pattern, flags } after switching to composite.
+  rule.type = nextType;
+
+  if (nextType === "regex") {
+    rule.params = { pattern: "", flags: "" };
+    return;
+  }
+
+  if (nextType === "use") {
+    rule.params = { target: "" };
+    return;
+  }
+
+  // composite
+  rule.params = { op: "AND", rules: [] };
 }
 
 // Subtask Management

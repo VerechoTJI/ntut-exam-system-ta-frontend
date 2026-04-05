@@ -12,6 +12,7 @@ vi.mock("axios", () => {
 import axios from "axios";
 import { setActivePinia, createPinia } from "pinia";
 import { useStudentDashboardStore } from "../src/stores/studentDashboardStore";
+import { useScoreStore } from "../src/stores/scoreStore";
 
 describe("studentDashboardStore.judgeStudentCode", () => {
     beforeEach(() => {
@@ -21,6 +22,9 @@ describe("studentDashboardStore.judgeStudentCode", () => {
 
     it("uses isJudging/judgeError and refreshes student score on success", async () => {
         const store = useStudentDashboardStore();
+        // judgeStudentCode now triggers a best-effort global scoreboard refresh.
+        // Mock it so this unit test stays isolated and doesn't spam stderr.
+        vi.spyOn(useScoreStore(), "fetchScores").mockResolvedValue(undefined as any);
         const fetchStudentScoreSpy = vi
             .spyOn(store, "fetchStudentScore")
             .mockResolvedValue(undefined as any);

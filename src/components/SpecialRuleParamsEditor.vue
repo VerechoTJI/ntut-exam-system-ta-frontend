@@ -10,13 +10,13 @@ type UseParams = { target: string };
 type CompositeOp = "AND" | "OR";
 
 type CompositeRuleChild = {
-  type: "regex" | "use";
-  params: RegexParams | UseParams;
+  type: "regex" | "use" | "composite";
+  params: unknown;
 };
 
 type CompositeParams = {
   op: CompositeOp;
-  children: CompositeRuleChild[];
+  rules: CompositeRuleChild[];
 };
 
 type BaseRule = {
@@ -56,27 +56,39 @@ function ensureUseParams(): UseParams {
 function ensureCompositeParams(): CompositeParams {
   const p = (props.rule.params ?? {}) as any;
   if (p.op !== "AND" && p.op !== "OR") p.op = "AND";
-  if (!Array.isArray(p.children)) p.children = [];
-  // sanitize children
-  p.children = p.children
-    .filter((c: any) => c && (c.type === "regex" || c.type === "use"))
+  if (!Array.isArray(p.rules)) p.rules = [];
+  // sanitize rules
+  p.rules = p.rules
+    .filter(
+      (c: any) =>
+        c && (c.type === "regex" || c.type === "use" || c.type === "composite"),
+    )
     .map((c: any) => {
       const child: CompositeRuleChild = {
         type: c.type,
-        params: c.type === "regex" ? { pattern: "", flags: "" } : { target: "" },
+        params: {},
       };
 
+      const cp = typeof c.params === "object" && c.params ? c.params : {};
+
       if (c.type === "regex") {
-        const cp = typeof c.params === "object" && c.params ? c.params : {};
         child.params = {
-          pattern: typeof cp.pattern === "string" ? cp.pattern : "",
-          flags: typeof cp.flags === "string" ? cp.flags : "",
-        };
-      } else {
-        const cp = typeof c.params === "object" && c.params ? c.params : {};
+          pattern: typeof (cp as any).pattern === "string" ? (cp as any).pattern : "",
+          flags: typeof (cp as any).flags === "string" ? (cp as any).flags : "",
+        } satisfies RegexParams;
+      }
+
+      if (c.type === "use") {
         child.params = {
-          target: typeof cp.target === "string" ? cp.target : "",
-        };
+          target: typeof (cp as any).target === "string" ? (cp as any).target : "",
+        } satisfies UseParams;
+      }
+
+      if (c.type === "composite") {
+        child.params = {
+          op: (cp as any).op === "OR" ? "OR" : "AND",
+          rules: Array.isArray((cp as any).rules) ? (cp as any).rules : [],
+        } satisfies CompositeParams;
       }
 
       return child;
@@ -92,18 +104,20 @@ const compositeParams = computed(() =>
   isComposite.value ? ensureCompositeParams() : null,
 );
 
-function addCompositeChild(type: "regex" | "use") {
+function addCompositeChild(type: "regex" | "use" | "composite") {
   const p = ensureCompositeParams();
-  p.children.push(
+  p.rules.push(
     type === "regex"
       ? { type, params: { pattern: "", flags: "" } }
-      : { type, params: { target: "" } },
+      : type === "use"
+        ? { type, params: { target: "" } }
+        : { type, params: { op: "AND", rules: [] } },
   );
 }
 
 function removeCompositeChild(index: number) {
   const p = ensureCompositeParams();
-  p.children.splice(index, 1);
+  p.rules.splice(index, 1);
 }
 </script>
 
@@ -172,15 +186,23 @@ function removeCompositeChild(index: number) {
           >
             + Child(regex)
           </button>
+          <button
+            type="button"
+            class="text-xs bg-blue-100 text-blue-700 px-3 py-2 rounded hover:bg-blue-200"
+            :disabled="disabled"
+            @click="addCompositeChild('composite')"
+          >
+            + Child(composite)
+          </button>
         </div>
       </div>
 
-      <div v-if="compositeParams!.children.length === 0" class="text-sm text-gray-500">
+  <div v-if="compositeParams!.rules.length === 0" class="text-sm text-gray-500">
         No composite children. Add at least one.
       </div>
 
       <div
-        v-for="(c, cIdx) in compositeParams!.children"
+  v-for="(c, cIdx) in compositeParams!.rules"
         :key="cIdx"
         class="rounded border border-gray-200 bg-gray-50 p-3"
       >
@@ -198,33 +220,18 @@ function removeCompositeChild(index: number) {
           </button>
         </div>
 
-        <div v-if="c.type === 'use'" class="mt-2">
-          <label class="block text-xs text-gray-500">target</label>
-          <input
-            v-model="(c.params as any).target"
-            :disabled="disabled"
-            class="mt-1 w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2 border font-mono"
-          />
-        </div>
-
-        <div v-else class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs text-gray-500">pattern</label>
-            <input
-              v-model="(c.params as any).pattern"
-              :disabled="disabled"
-              class="mt-1 w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2 border font-mono"
-            />
-          </div>
-          <div>
-            <label class="block text-xs text-gray-500">flags (optional)</label>
-            <input
-              v-model="(c.params as any).flags"
-              :disabled="disabled"
-              class="mt-1 w-full rounded-md border-gray-300 shadow-sm sm:text-sm p-2 border font-mono"
-            />
-          </div>
-        </div>
+        <!-- Nested child editing (including composite-of-composite) is handled recursively. -->
+        <SpecialRuleParamsEditor
+          :rule="({
+            id: `${props.rule.id}/child-${cIdx}`,
+            type: c.type,
+            constraint: props.rule.constraint,
+            message: props.rule.message,
+            severity: props.rule.severity,
+            params: c.params,
+          } as any)"
+          :disabled="disabled"
+        />
       </div>
     </div>
 

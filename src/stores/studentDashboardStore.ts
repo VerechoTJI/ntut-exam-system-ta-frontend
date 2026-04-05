@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import axios from "axios";
 import { BASE_URL } from "../utilities/api";
 import type { ScoreBoardFormat, StudentRecord } from "./scoreStore";
+import { useScoreStore } from "./scoreStore";
 
 export interface StudentCodeResponse {
   codeList: string[];
@@ -18,11 +19,11 @@ export const useStudentDashboardStore = defineStore("studentDashboard", {
     currentStudentCode: null as StudentCodeResponse | null,
     currentStudentScore: null as StudentRecord | null,
     judgeResult: null as ScoreBoardFormat | null,
-  isLoading: false,
-  error: null as string | null,
+    isLoading: false,
+    error: null as string | null,
 
-  isJudging: false,
-  judgeError: null as string | null,
+    isJudging: false,
+    judgeError: null as string | null,
   }),
 
   actions: {
@@ -92,6 +93,12 @@ export const useStudentDashboardStore = defineStore("studentDashboard", {
           this.judgeResult = response.data.data.result;
           // Usually re-fetch score after judging?
           await this.fetchStudentScore(studentID);
+
+          // Also refresh the global scoreboard so SpecialRuleResults/reasons
+          // shown in ScoreTable stay in sync after a rejudge.
+          // NOTE: scoreStore.fetchScores() catches internally and doesn't throw,
+          // but we still await it so the UI reflects updated reasons ASAP.
+          await useScoreStore().fetchScores();
         }
       } catch (err: any) {
         console.error("Failed to judge student code:", err);
@@ -107,8 +114,8 @@ export const useStudentDashboardStore = defineStore("studentDashboard", {
       this.judgeResult = null;
       this.error = null;
 
-  this.isJudging = false;
-  this.judgeError = null;
+      this.isJudging = false;
+      this.judgeError = null;
     },
   },
 });
