@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { useStudentDashboardStore } from "../stores/studentDashboardStore";
 import { useUserStore } from "../stores/userStore";
 import CodeViewer from "../components/CodeViewer.vue";
@@ -10,25 +10,50 @@ const searchID = ref("");
 const selectedTestCase = ref<any>(null);
 const deviceInfo = ref<{ ip: string; mac: string } | null>(null);
 const cryptoExisting = ref(false);
+const refreshInterval = 10000; // 10 seconds
+let autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
 onMounted(() => {
   dashboardStore.fetchSubmittedStudents();
 });
 
-const handleSearch = async () => {
+const refreshStudentData = async () => {
   if (!searchID.value.trim()) return;
-  dashboardStore.clearCurrentStudent();
-
-  // Fetch both score and code in parallel for efficiency
   await Promise.all([
     dashboardStore.fetchStudentScore(searchID.value),
     dashboardStore.fetchStudentCode(searchID.value),
     getUserDeviceInfo({studentID: searchID.value}),
     userStore.isUserCryptoExisting(searchID.value).then(exists => {
       cryptoExisting.value = exists;
-    }),  
+    }),
   ]);
 };
+
+const startAutoRefresh = () => {
+  stopAutoRefresh();
+  autoRefreshTimer = setInterval(() => {
+    refreshStudentData();
+  }, refreshInterval);
+};
+
+const stopAutoRefresh = () => {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+};
+
+const handleSearch = async () => {
+  if (!searchID.value.trim()) return;
+  dashboardStore.clearCurrentStudent();
+
+  await refreshStudentData();
+  startAutoRefresh();
+};
+
+onUnmounted(() => {
+  stopAutoRefresh();
+});
 
 const quickSearch = (sid: string) => {
   searchID.value = sid;
